@@ -37,7 +37,7 @@ app.get("/health", (_req: Request, res: Response) => {
 
 // Hello route (original behavior preserved)
 app.get("/", (_req: Request, res: Response) => {
-  res.send("Hello, TypeScript!");
+  res.send("Hello, NorthStar!");
 });
 
 // API routes
