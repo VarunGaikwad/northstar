@@ -23,10 +23,28 @@ const hm = z
 
 const tz = z.string().trim().max(60).optional();
 
+const tzRequired = z.string().trim().min(1, "tz is required").max(60);
+
 const reason = z.string().trim().max(500).optional();
 
 // Body for clock-in / clock-out: only an optional timezone.
 export const clockActionSchema = z.object({ tz });
+
+// Body for creating a manual attendance record for a past date.
+// `date` and `tz` are required; at least one of `checkIn` / `checkOut` must
+// be supplied. Further (timezone-aware) validation happens in the service.
+export const createManualSchema = z
+  .object({
+    date: isoDate,
+    checkIn: hm.optional(),
+    checkOut: hm.optional(),
+    tz: tzRequired,
+    reason,
+  })
+  .refine((d) => d.checkIn !== undefined || d.checkOut !== undefined, {
+    message: "provide at least one of checkIn or checkOut",
+    path: [],
+  });
 
 // Body for correcting a record's times. At least one of the two must change.
 export const correctAttendanceSchema = z
@@ -74,6 +92,7 @@ export const myMonthQuerySchema = z.object({
 
 export type ClockAction = z.infer<typeof clockActionSchema>;
 export type CorrectAttendance = z.infer<typeof correctAttendanceSchema>;
+export type CreateManual = z.infer<typeof createManualSchema>;
 export type MyDayQuery = z.infer<typeof myDayQuerySchema>;
 export type MyRangeQuery = z.infer<typeof myRangeQuerySchema>;
 export type MyMonthQuery = z.infer<typeof myMonthQuerySchema>;

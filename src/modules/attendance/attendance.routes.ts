@@ -11,6 +11,9 @@ router.use(authenticate);
 router.post("/clock-in", controller.clockIn);
 router.post("/clock-out", controller.clockOut);
 
+// Create a manual attendance record for a past date.
+router.post("/", controller.createManual);
+
 // Read your own attendance.
 router.get("/me", controller.getMyDay);
 router.get("/me/range", controller.getMyRange);

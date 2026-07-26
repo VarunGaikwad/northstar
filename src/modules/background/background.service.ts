@@ -11,6 +11,8 @@ type CacheEntry = {
 
 let cache: CacheEntry | null = null;
 
+const DEFAULT_BACKGROUND_QUERY = "beautiful Japan Incredible India";
+
 function getUtcDateKey(): string {
   const now = new Date();
   return now.toISOString().slice(0, 10); // yyyy-mm-dd
@@ -76,14 +78,15 @@ async function fetchRandomPhoto(query: string | undefined): Promise<BackgroundIm
 
 // ── Public service function ──────────────────────────────────────────
 export async function getBackground(query: string | undefined): Promise<BackgroundResponse> {
+  const effectiveQuery = query?.trim() || DEFAULT_BACKGROUND_QUERY;
   const dateKey = getUtcDateKey();
-  const queryKey = buildQueryKey(query);
+  const queryKey = buildQueryKey(effectiveQuery);
 
   if (cache && cache.dateKey === dateKey && cache.queryKey === queryKey) {
     return cache.response;
   }
 
-  const image = await fetchRandomPhoto(query);
+  const image = await fetchRandomPhoto(effectiveQuery);
   const response: BackgroundResponse = { image };
 
   cache = { dateKey, queryKey, response };

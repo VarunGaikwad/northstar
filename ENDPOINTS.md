@@ -16,6 +16,8 @@ Base URL: `http://localhost:<PORT>` (default `3000`, configured in `.env`)
 - [FavLinks](#favlinks)
 - [Weather](#weather)
 - [LRT Timetable](#lrt-timetable)
+- [Background](#background)
+- [Quote of the Day](#quote-of-the-day)
 - [Attendance](#attendance)
 - [Error Response Format](#error-response-format)
 - [TypeScript Type Definitions](#typescript-type-definitions)
@@ -35,14 +37,17 @@ endpoint. Endpoint-specific details are in the sections below.
 
 ### CORS
 
-⚠️ **No CORS middleware is configured on the backend.** This affects how you call the API:
+The backend **does** enable CORS via the `cors` middleware, gated by the `FRONTEND_URL` env var.
 
-- If your frontend runs on a **different origin** than the API (e.g. `http://localhost:5173` → `http://localhost:3000`), the browser will block the responses unless backend CORS is added. Three options:
-  1. Add `cors` middleware on the backend (recommended for production), or
-  2. In dev, set up a **Vite/webpack dev-server proxy** that forwards `/api` to the backend (e.g. Vite `server.proxy['/api'] = { target: 'http://localhost:3000', changeOrigin: true }`) and call the API via the same origin as your frontend, or
-  3. Run frontend and backend behind the same origin via a reverse proxy.
-
-The backend's own `FRONTEND_URL` env var (default `http://localhost:5173`) is currently used only for password-reset email links — it does **not** enable CORS.
+- `FRONTEND_URL` accepts a **single URL or a comma-separated list** of allowed origins. Every listed origin may call the API from a browser; unlisted origins are blocked. The browser's actual request origin is reflected back in `Access-Control-Allow-Origin`, and a `Vary: Origin` header is sent.
+  ```env
+  # One origin
+  FRONTEND_URL="http://localhost:5173"
+  # Multiple origins (first entry is used for password-reset email links)
+  FRONTEND_URL="http://localhost:5173,http://localhost:3001,https://app.example.com"
+  ```
+- The **first** entry in the list is the canonical frontend URL used to build password-reset email links, so keep your primary production frontend first.
+- If your frontend runs on an origin **not** in `FRONTEND_URL`, the browser will block the responses. You can either add it to `FRONTEND_URL`, or in dev use a **Vite/webpack dev-server proxy** forwarding `/api` to the backend (e.g. Vite `server.proxy['/api'] = { target: 'http://localhost:3000', changeOrigin: true }`) so requests share the frontend's origin.
 
 ### Authentication model
 
@@ -518,29 +523,67 @@ If `lat` and `lon` are provided, they are used directly (more accurate).
   "success": true,
   "data": {
     "location": {
-      "city": "Mumbai",
+      "city": "Hanawadamachi",
       "region": "Maharashtra",
-      "country": "India",
-      "lat": 19.076,
-      "lon": 72.8777,
-      "source": "ip"
+      "country": "Japan",
+      "lat": 36.5545,
+      "lon": 139.9143,
+      "source": "ip",
+      "cityId": 1863219,
+      "timezone": 32400
     },
     "weather": {
-      "temperature": 32.5,
-      "feelsLike": 35.1,
-      "condition": "Partly cloudy",
-      "conditionCode": 2,
-      "humidity": 65,
-      "windSpeed": 12.3,
-      "windDirection": 180
-    }
+      "temperature": 32.4,
+      "feelsLike": 37,
+      "condition": "light rain",
+      "conditionCode": 500,
+      "conditionMain": "Rain",
+      "conditionIcon": "10d",
+      "humidity": 57,
+      "pressure": 1008,
+      "seaLevel": 1008,
+      "grndLevel": 997,
+      "tempMin": 32.4,
+      "tempMax": 32.4,
+      "visibility": 10000,
+      "windSpeed": 1.64,
+      "windDirection": 114,
+      "windGust": 1.82,
+      "cloudCoverage": 28,
+      "rain1h": 0.46,
+      "sunrise": 1784922022,
+      "sunset": 1784973182,
+      "country": "JP",
+      "timestamp": 1784949118
+    },
+    "conditions": [
+      { "id": 500, "main": "Rain", "description": "light rain", "icon": "10d" }
+    ],
+    "main": {
+      "temp": 32.4,
+      "feelsLike": 37,
+      "tempMin": 32.4,
+      "tempMax": 32.4,
+      "pressure": 1008,
+      "humidity": 57,
+      "seaLevel": 1008,
+      "grndLevel": 997
+    },
+    "wind": { "speed": 1.64, "deg": 114, "gust": 1.82 },
+    "clouds": { "all": 28 },
+    "rain": { "1h": 0.46 },
+    "sys": { "country": "JP", "sunrise": 1784922022, "sunset": 1784973182 },
+    "base": "stations",
+    "cod": 200
   }
 }
 ```
 
-- `location.source` is `"ip"` when geolocated, `"user"` when `lat`/`lon` were provided.
-- `weather.conditionCode` is the [WMO weather interpretation code](https://open-meteo.com/en/docs#weathervariables).
-- Temperature in **°C**, wind speed in **km/h**, humidity in **%**.
+- `location.source` is `"ip"` when geolocated, `"user"` when `lat`/`lon` were provided. `location.city`/`cityId`/`timezone` come from OpenWeatherMap's reverse lookup at the resolved coordinates.
+- `weather.conditionCode` / `weather.conditionIcon` are the OpenWeatherMap weather condition id (e.g. `500`) and icon code (e.g. `"10d"`). See the [OWM weather condition codes](https://openweathermap.org/weather-conditions).
+- Convenience fields are mirrored into nested objects: `conditions[]` (the full weather array), `main` (temperature/pressure/humidity block), `wind`, `clouds`, `rain`, `sys`. `weather.*` camelCase fields remain stable for simple consumers; the nested blocks preserve the raw OpenWeatherMap shape.
+- `rain` and `windGust` / `seaLevel` / `grndLevel` are **omitted when OpenWeatherMap does not return them** (no rain, no gust, non-pressure-station readings).
+- Temperature in **°C**, wind speed in **m/s**, humidity in **%**, pressure in **hPa**, visibility in **metres**. Sunrise/sunset/timestamp are **Unix seconds (UTC)**.
 
 **Example requests**
 
@@ -764,6 +807,106 @@ curl "http://localhost:3000/api/lrt/search?from=Hiraishi&to=Utsunomiya+Station+E
 
 ---
 
+## Background
+
+Prefix: `/api/background`
+
+No authentication required. Returns a curated Unsplash landscape photo, refreshed once per UTC day and cached in memory.
+
+| Method | Path              | Auth | Description                  |
+|--------|-------------------|------|------------------------------|
+| GET    | `/api/background` | No   | Get a daily background image |
+
+### GET `/api/background`
+
+**Query parameters**
+
+| Param   | Type   | Required | Description                                                              |
+|---------|--------|----------|--------------------------------------------------------------------------|
+| `query` | string | No       | Search term passed to Unsplash (e.g. `nature`, `city`). Defaults to `beautiful Japan Incredible India`. |
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "image": {
+      "url": "https://images.unsplash.com/photo-...?w=1920&h=1080&fit=crop&q=80",
+      "alt": "A scenic mountain landscape",
+      "unsplashUrl": "https://unsplash.com/photos/...",
+      "photographer": {
+        "name": "Jane Doe",
+        "username": "janedoe",
+        "profileUrl": "https://unsplash.com/@janedoe"
+      }
+    }
+  }
+}
+```
+
+- The same image is returned for every caller until the UTC date rolls over or the server restarts.
+- When no `query` is provided, Unsplash is asked for `beautiful Japan Incredible India`.
+- `url` is already sized to `1920×1080` with `fit=crop` and `q=80`.
+- If the upstream Unsplash API call fails, the endpoint returns `502`.
+
+**Error `400`** — invalid query parameter
+```json
+{ "success": false, "error": "Query must be a non-empty string" }
+```
+
+**Error `502`** — upstream Unsplash API failure
+```json
+{ "success": false, "error": "Unsplash API error: ..." }
+```
+
+---
+
+## Quote of the Day
+
+Prefix: `/api/quote`
+
+No authentication required. Returns a single curated famous quote per UTC day, deterministically chosen from a bundled list.
+
+| Method | Path         | Auth | Description                  |
+|--------|--------------|------|------------------------------|
+| GET    | `/api/quote` | No   | Get today's daily quote      |
+
+### GET `/api/quote`
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "date": "2026-07-26",
+    "index": 47,
+    "quote": {
+      "text": "The only way to do great work is to love what you do.",
+      "author": "Steve Jobs"
+    }
+  }
+}
+```
+
+**Field notes**
+
+- `date` is the UTC `YYYY-MM-DD` used to select the quote.
+- `index` is the 0-based position in the bundled list; useful for debugging and verifying determinism.
+- `quote.text` and `quote.author` are always present.
+- `quote.category` is optional and may be `"wisdom" | "life" | "work" | "courage" | "happiness"`.
+- The same quote is returned until UTC midnight, then the next day's quote is selected.
+- The pick is deterministic across callers and server restarts: `floor(UTC midnight epoch / 86400000) mod list.length`.
+
+**Error `500`** — empty quote list (should never happen in production)
+
+```json
+{ "success": false, "error": "No quotes available" }
+```
+
+---
+
 ## Attendance
 
 Prefix: `/api/attendance`
@@ -772,6 +915,7 @@ Track check-in / check-out, one of each per user per day. All endpoints require 
 
 | Method | Path              | Auth | Description                                            |
 |--------|-------------------|------|--------------------------------------------------------|
+| POST   | `/`               | Yes  | Create a manual attendance record for a past date      |
 | POST   | `/clock-in`       | Yes  | Clock in for today                                     |
 | POST   | `/clock-out`      | Yes  | Clock out for today                                    |
 | GET    | `/me`             | Yes  | Get my attendance for a day (defaults to today)        |
@@ -784,7 +928,76 @@ Track check-in / check-out, one of each per user per day. All endpoints require 
 
 Clock-in/out **always apply to the day in the record's timezone** — the server wall-clock instant is classified into a `YYYY-MM-DD` in the supplied timezone (`?tz=` on clock endpoints, default `UTC`). A single check-in + check-out per user per day is enforced (`@@unique([userId, date])`).
 
-All times are stored as UTC `DateTime` and rendered both as ISO 8601 (UTC) and as `HH:MM` in the record's timezone (`checkInLocal` / `checkOutLocal`). `workedMinutes` is computed as `checkOut − checkIn` in absolute UTC — so it stays correct even when check-out lands on the next UTC day (e.g. a late shift in a `+` timezone).
+All times are stored as UTC `DateTime` and rendered both as ISO 8601 (UTC) and as `HH:MM` in the record's timezone (`checkInLocal` / `checkOutLocal`). `workedMinutes` is computed as `checkOut − checkIn` in absolute UTC (null unless both are present) — so it stays correct even when check-out lands on the next UTC day (e.g. a late shift in a `+` timezone). A `checkIn` is always present for clock-in-created records; manually-created records (`POST /api/attendance`) may have only a `checkOut`, so `checkInAt` / `checkInLocal` can be `null`.
+
+### POST `/api/attendance`
+
+Create a manual attendance record for a **past** date (e.g. you forgot to clock in for a previous day). Today's attendance must be created via `POST /api/attendance/clock-in` instead.
+
+**Request body**
+
+| Field      | Type   | Required | Description                                            |
+|------------|--------|----------|--------------------------------------------------------|
+| `date`     | string | Yes      | `YYYY-MM-DD`. Must be a past day in `tz` (not today, not future). |
+| `tz`       | string | Yes      | IANA timezone name (e.g. `Asia/Tokyo`). The day classification and time conversion use this zone. |
+| `checkIn`  | string | No*      | `HH:MM` (24h) check-in time on `date`, in `tz`. |
+| `checkOut` | string | No*      | `HH:MM` (24h) check-out time on `date`, in `tz`. |
+| `reason`   | string | No       | Optional note (max 500 chars) recorded on the audit rows. |
+
+\*At least one of `checkIn` / `checkOut` must be provided. If both are given, `checkOut` must be after `checkIn` (same wall-clock day in `tz`; absolute UTC ordering is enforced, so a late shift that crosses UTC midnight is still allowed as long as the wall time is later).
+
+**Example request**
+
+```bash
+curl -X POST http://localhost:3000/api/attendance \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"date":"2026-07-20","tz":"Asia/Tokyo","checkIn":"09:00","checkOut":"18:00","reason":"forgot to clock in/out"}'
+```
+
+**Response `201`** — the created `AttendanceDTO` (same shape as clock-in, with the audit `edits[]` populated):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "clxxxx",
+    "userId": "clyyyy",
+    "date": "2026-07-20",
+    "timezone": "Asia/Tokyo",
+    "checkInAt": "2026-07-20T00:00:00.000Z",
+    "checkOutAt": "2026-07-20T09:00:00.000Z",
+    "checkInLocal": "09:00",
+    "checkOutLocal": "18:00",
+    "workedMinutes": 540,
+    "createdAt": "...",
+    "updatedAt": "...",
+    "edits": [
+      { "id": "cle001", "field": "CHECK_IN",  "oldValue": null, "oldValueLocal": null, "newValue": "2026-07-20T00:00:00.000Z", "newValueLocal": "09:00", "reason": "forgot to clock in/out", "editedAt": "...", "editedByUserId": "clyyyy" },
+      { "id": "cle002", "field": "CHECK_OUT", "oldValue": null, "oldValueLocal": null, "newValue": "2026-07-20T09:00:00.000Z", "newValueLocal": "18:00", "reason": "forgot to clock in/out", "editedAt": "...", "editedByUserId": "clyyyy" }
+    ]
+  }
+}
+```
+
+- One `AttendanceEdit` audit row is created **per provided field** (`CHECK_IN` and/or `CHECK_OUT`), each with `oldValue: null` and `newValue` = the supplied time. `reason` is attached to each row when provided.
+- `workedMinutes` is `null` unless both `checkIn` and `checkOut` are provided.
+- If only `checkOut` is provided, the record is created with `checkInAt` / `checkInLocal` = `null` (no `CHECK_IN` audit row is written).
+
+**Errors**
+
+| Status | Condition                                                                  |
+|--------|----------------------------------------------------------------------------|
+| 400    | `date` missing/malformed; `tz` missing/unknown; `checkIn`/`checkOut` not `HH:MM`; neither provided; `checkOut` not after `checkIn`; `date` is today or in the future (in `tz`) |
+| 409    | An attendance record already exists for `(userId, date)` — correct it with `PATCH /:id` instead |
+
+```json
+{ "success": false, "error": "Use the clock-in endpoint for today; manual creation is for past dates" }
+{ "success": false, "error": "date must not be in the future" }
+{ "success": false, "error": "checkOut must be after checkIn" }
+{ "success": false, "error": "provide at least one of checkIn or checkOut" }
+{ "success": false, "error": "An attendance record already exists for 2026-07-20 (Asia/Tokyo) — use PATCH /:id to correct it" }
+```
 
 ### POST `/api/attendance/clock-in`
 
@@ -1071,15 +1284,18 @@ All errors follow a consistent shape:
 |20 | GET    | `/api/lrt/timetable`     | —    | LRT timetable for a day    |
 |21 | GET    | `/api/lrt/stations`      | —    | LRT station list (19)      |
 |22 | GET    | `/api/lrt/search`        | —    | LRT trains from→to for a date |
-|23 | POST   | `/api/attendance/clock-in` | Yes  | Clock in for today            |
-|24 | POST   | `/api/attendance/clock-out`| Yes  | Clock out for today           |
-|25 | GET    | `/api/attendance/me`     | Yes  | My attendance for a day       |
-|26 | GET    | `/api/attendance/me/range`| Yes  | My attendance by date range   |
-|27 | GET    | `/api/attendance/me/month`| Yes  | My attendance for a month + summary |
-|28 | PATCH  | `/api/attendance/:id`    | Yes  | Correct check-in/out time     |
-|29 | GET    | `/api/attendance/:id/history`| Yes| Attendance correction history |
+|23 | GET    | `/api/background`        | —    | Daily background image     |
+|24 | GET    | `/api/quote`             | —    | Daily quote                |
+|25 | POST   | `/api/attendance`          | Yes  | Create manual attendance for a past date |
+|26 | POST   | `/api/attendance/clock-in` | Yes  | Clock in for today            |
+|27 | POST   | `/api/attendance/clock-out`| Yes  | Clock out for today           |
+|28 | GET    | `/api/attendance/me`     | Yes  | My attendance for a day       |
+|29 | GET    | `/api/attendance/me/range`| Yes  | My attendance by date range   |
+|30 | GET    | `/api/attendance/me/month`| Yes  | My attendance for a month + summary |
+|31 | PATCH  | `/api/attendance/:id`    | Yes  | Correct check-in/out time     |
+|32 | GET    | `/api/attendance/:id/history`| Yes| Attendance correction history |
 
-**Total: 29 endpoints** (6 public root/weather/lrt, 4 auth, 2 users, 5 folders, 5 favlinks, 7 attendance)
+**Total: 32 endpoints** (8 public root/weather/lrt/background/quote, 4 auth, 2 users, 5 folders, 5 favlinks, 8 attendance)
 
 ---
 
@@ -1140,22 +1356,110 @@ export interface WeatherLocation {
   country: string;
   lat: number;
   lon: number;
-  source: "ip" | "user";   // "ip" = geolocated, "user" = lat/lon supplied
+  source: "ip" | "user";     // "ip" = geolocated, "user" = lat/lon supplied
+  cityId: number | null;     // OWM city id, or null before lookup
+  timezone: number | null;   // shift in seconds from UTC
 }
 
 export interface WeatherConditions {
-  temperature: number;     // °C
-  feelsLike: number;       // °C
-  condition: string;
-  conditionCode: number;   // WMO weather interpretation code
-  humidity: number;       // %
-  windSpeed: number;      // km/h
-  windDirection: number;  // degrees
+  temperature: number;        // °C
+  feelsLike: number;          // °C
+  condition: string;          // OWM description, e.g. "light rain"
+  conditionCode: number;      // OWM weather id, e.g. 500
+  conditionMain: string;      // OWM main, e.g. "Rain"
+  conditionIcon: string;      // OWM icon code, e.g. "10d"
+  humidity: number;           // %
+  pressure: number;           // hPa
+  seaLevel?: number;          // hPa
+  grndLevel?: number;         // hPa
+  tempMin: number;            // °C
+  tempMax: number;            // °C
+  visibility: number;        // metres
+  windSpeed: number;         // m/s
+  windDirection: number;     // degrees
+  windGust?: number;          // m/s
+  cloudCoverage: number;     // %
+  rain1h?: number;            // mm in last hour
+  sunrise: number;            // Unix seconds (UTC)
+  sunset: number;             // Unix seconds (UTC)
+  country: string;            // ISO 3166 country code (from sys)
+  timestamp: number;          // Unix seconds (UTC) of the observation
+}
+
+export interface WeatherConditionEntry {
+  id: number;
+  main: string;
+  description: string;
+  icon: string;
+}
+
+export interface WeatherMain {
+  temp: number;
+  feelsLike: number;
+  tempMin: number;
+  tempMax: number;
+  pressure: number;
+  humidity: number;
+  seaLevel?: number;
+  grndLevel?: number;
+}
+
+export interface WeatherWind {
+  speed: number;
+  deg: number;
+  gust?: number;
+}
+
+export interface WeatherSys {
+  country: string;
+  sunrise: number;
+  sunset: number;
 }
 
 export interface WeatherResponse {
   location: WeatherLocation;
-  weather: WeatherConditions;
+  weather: WeatherConditions;          // camelCase convenience block
+  conditions: WeatherConditionEntry[];   // raw OWM weather array
+  main: WeatherMain;
+  wind: WeatherWind;
+  clouds: { all: number };
+  rain?: { "1h": number };
+  sys: WeatherSys;
+  base: string;
+  cod: number;
+}
+
+// ── Background ──────────────────────────────────────────────────────
+export interface PhotographerCredit {
+  name: string;
+  username: string;
+  profileUrl: string;
+}
+
+export interface BackgroundImage {
+  url: string;            // 1920x1080 cropped Unsplash image URL
+  alt: string | null;     // Photo description
+  unsplashUrl: string;    // Link to the photo on Unsplash
+  photographer: PhotographerCredit;
+}
+
+export interface BackgroundResponse {
+  image: BackgroundImage;
+}
+
+// ── Quote of the Day ────────────────────────────────────────────────
+export type QuoteCategory = "wisdom" | "life" | "work" | "courage" | "happiness";
+
+export interface Quote {
+  text: string;
+  author: string;
+  category?: QuoteCategory;
+}
+
+export interface QuoteResponse {
+  date: string;  // YYYY-MM-DD (UTC)
+  index: number; // 0-based position in the bundled list
+  quote: Quote;
 }
 
 // ── LRT Timetable ──────────────────────────────────────────────────

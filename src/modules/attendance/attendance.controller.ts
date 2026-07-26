@@ -3,6 +3,7 @@ import { ApiError } from "../../utils/ApiError";
 import {
   correctAttendanceSchema,
   clockActionSchema,
+  createManualSchema,
   myDayQuerySchema,
   myMonthQuerySchema,
   myRangeQuerySchema,
@@ -43,6 +44,17 @@ export async function clockOut(req: Request, res: Response): Promise<void> {
   }
   const data = await service.clockOut(userId, parsed.data.tz);
   res.status(200).json({ success: true, data });
+}
+
+// POST /api/attendance  body { date, checkIn?, checkOut?, tz, reason? }
+export async function createManual(req: Request, res: Response): Promise<void> {
+  const userId = requireUser(req);
+  const parsed = createManualSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new ApiError(parsed.error.issues.map((e) => e.message).join(", "), 400);
+  }
+  const data = await service.createManual(userId, parsed.data);
+  res.status(201).json({ success: true, data });
 }
 
 // GET /api/attendance/me?date=YYYY-MM-DD&tz=...

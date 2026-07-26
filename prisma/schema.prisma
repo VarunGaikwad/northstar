@@ -145,7 +145,7 @@ model Attendance {
   user       User     @relation("UserAttendance", fields: [userId], references: [id], onDelete: Cascade)
   date       String   // YYYY-MM-DD in the record's timezone
   timezone   String   @default("UTC") // IANA tz name (e.g. Asia/Tokyo)
-  checkInAt  DateTime
+  checkInAt  DateTime?
   checkOutAt DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

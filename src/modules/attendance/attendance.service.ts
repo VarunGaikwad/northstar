@@ -50,9 +50,9 @@ export function toDTO(a: Attendance & { edits?: AttendanceEdit[] }): AttendanceD
     userId: a.userId,
     date: a.date,
     timezone: tz,
-    checkInAt: a.checkInAt.toISOString(),
+    checkInAt: a.checkInAt ? a.checkInAt.toISOString() : null,
     checkOutAt: a.checkOutAt ? a.checkOutAt.toISOString() : null,
-    checkInLocal: timeInTz(a.checkInAt, tz),
+    checkInLocal: a.checkInAt ? timeInTz(a.checkInAt, tz) : null,
     checkOutLocal: a.checkOutAt ? timeInTz(a.checkOutAt, tz) : null,
     workedMinutes,
     createdAt: a.createdAt.toISOString(),
@@ -75,7 +75,9 @@ export async function clockIn(userId: string, tzParam?: string): Promise<Attenda
   });
   if (existing) {
     throw new ApiError(
-      `Already clocked in on ${date} (${tz}) at ${timeInTz(existing.checkInAt, tz)} — use the correct endpoint to fix it`,
+      `Already clocked in on ${date} (${tz}) at ${
+        existing.checkInAt ? timeInTz(existing.checkInAt, tz) : "—"
+      } — use the correct endpoint to fix it`,
       409,
     );
   }
@@ -109,7 +111,7 @@ export async function clockOut(userId: string, tzParam?: string): Promise<Attend
       409,
     );
   }
-  if (now.getTime() < record.checkInAt.getTime()) {
+  if (record.checkInAt && now.getTime() < record.checkInAt.getTime()) {
     // Edge guard: should not happen with server clocks, but stay safe.
     throw new ApiError("Clock-out time is before the clock-in time", 400);
   }
@@ -120,6 +122,119 @@ export async function clockOut(userId: string, tzParam?: string): Promise<Attend
     include: withEdits,
   });
   return toDTO(updated);
+}
+
+// ── Create a manual record for a past date ────────────────────────────
+export type ManualCreateInput = {
+  date: string; // YYYY-MM-DD
+  checkIn?: string; // HH:MM
+  checkOut?: string; // HH:MM
+  tz: string; // IANA timezone
+  reason?: string;
+};
+
+export type ValidatedManual = {
+  date: string;
+  tz: string;
+  checkInAt: Date | null;
+  checkOutAt: Date | null;
+};
+
+/**
+ * Pure validation for manual-record input (no DB access). Assumes the input
+ * has already passed the Zod schema (structural shapes). Enforces the
+ * timezone-aware rules: date must be a past day (not today, not future), and
+ * when both times are present checkOut must be after checkIn. Converts the
+ * wall-clock times to UTC instants in `tz`, reusing the same helper as
+ * PATCH /api/attendance/:id (`zonedPartsToUtc`).
+ *
+ * Exported so the rule logic can be unit-tested without a database.
+ */
+export function validateManualCreateInput(
+  input: ManualCreateInput,
+  now: Date,
+): ValidatedManual {
+  const tz = normalizeTimezone(input.tz);
+  const today = dateInTz(now, tz);
+
+  if (input.date === today) {
+    throw new ApiError(
+      "Use the clock-in endpoint for today; manual creation is for past dates",
+      400,
+    );
+  }
+  if (input.date > today) {
+    throw new ApiError("date must not be in the future", 400);
+  }
+
+  const { year, month, day } = parseIsoDate(input.date);
+
+  let checkInAt: Date | null = null;
+  let checkOutAt: Date | null = null;
+  if (input.checkIn !== undefined) {
+    const { hour, minute } = parseHM(input.checkIn);
+    checkInAt = zonedPartsToUtc(year, month, day, hour, minute, tz);
+  }
+  if (input.checkOut !== undefined) {
+    const { hour, minute } = parseHM(input.checkOut);
+    checkOutAt = zonedPartsToUtc(year, month, day, hour, minute, tz);
+  }
+
+  if (checkInAt && checkOutAt && checkOutAt.getTime() <= checkInAt.getTime()) {
+    throw new ApiError("checkOut must be after checkIn", 400);
+  }
+
+  return { date: input.date, tz, checkInAt, checkOutAt };
+}
+
+export async function createManual(
+  userId: string,
+  input: ManualCreateInput,
+): Promise<AttendanceDTO> {
+  const { date, tz, checkInAt, checkOutAt } = validateManualCreateInput(input, new Date());
+
+  // One record per (user, date) — duplicates are rejected with 409.
+  const existing = await prisma.attendance.findUnique({
+    where: { userId_date: { userId, date } },
+    include: withEdits,
+  });
+  if (existing) {
+    throw new ApiError(
+      `An attendance record already exists for ${date} (${tz}) — use PATCH /:id to correct it`,
+      409,
+    );
+  }
+
+  // One audit edit per provided field: oldValue null, newValue = the time.
+  // Use a single nested create (atomic, one DB round-trip) instead of an
+  // interactive $transaction — the @neondatabase/serverless adapter speaks to
+  // Postgres over WebSockets, which terminate interactive transactions that
+  // hold a connection open across multiple awaited statements.
+  const editsCreate: { field: AttendanceField; newValue: Date; reason: string | null }[] = [];
+  const reason = input.reason ?? null;
+  if (checkInAt) editsCreate.push({ field: "CHECK_IN", newValue: checkInAt, reason });
+  if (checkOutAt) editsCreate.push({ field: "CHECK_OUT", newValue: checkOutAt, reason });
+
+  const created = await prisma.attendance.create({
+    data: {
+      userId,
+      date,
+      timezone: tz,
+      checkInAt,
+      checkOutAt,
+      edits: {
+        create: editsCreate.map((e) => ({
+          userId,
+          field: e.field,
+          oldValue: null,
+          newValue: e.newValue,
+          reason: e.reason,
+        })),
+      },
+    },
+    include: withEdits,
+  });
+  return toDTO(created);
 }
 
 // ── Get my day ───────────────────────────────────────────────────────
@@ -219,7 +334,10 @@ export async function getMyMonth(
       totalWorkedMinutes += mins;
       if (longest === null || mins > longest) longest = mins;
       if (shortest === null || mins < shortest) shortest = mins;
-    } else {
+    } else if (r.checkInAt) {
+      // Clocked in but not out yet. Records with only a check-out (and no
+      // check-in, created manually) are counted as present but neither
+      // completed nor pending here.
       daysClockedOutPending += 1;
     }
   }
@@ -268,8 +386,8 @@ export async function correctAttendance(
   const { year, month, day } = parseIsoDate(record.date);
 
   // Compute new instants for whichever fields are supplied.
-  let newCheckIn = record.checkInAt;
-  let newCheckOut = record.checkOutAt;
+  let newCheckIn: Date | null = record.checkInAt;
+  let newCheckOut: Date | null = record.checkOutAt;
 
   if (input.checkIn !== undefined) {
     const { hour, minute } = parseHM(input.checkIn);
@@ -283,21 +401,26 @@ export async function correctAttendance(
   // A checkout time may legitimately land on the next UTC day (e.g. late shift
   // in a +tz). Allow checkOut to be before checkIn in *wall* terms only if it
   // falls in the same record day; we instead enforce absolute ordering.
-  if (newCheckOut && newCheckOut.getTime() < newCheckIn.getTime()) {
+  if (newCheckIn && newCheckOut && newCheckOut.getTime() < newCheckIn.getTime()) {
     throw new ApiError("checkOut must be after checkIn", 400);
   }
 
   // Build edit rows only for fields that actually changed.
   const edits: { field: AttendanceField; old: Date | null; neu: Date }[] = [];
-  if (input.checkIn !== undefined && record.checkInAt.getTime() !== newCheckIn.getTime()) {
-    edits.push({ field: "CHECK_IN", old: record.checkInAt, neu: newCheckIn });
+  if (input.checkIn !== undefined && newCheckIn) {
+    const changed = record.checkInAt
+      ? record.checkInAt.getTime() !== newCheckIn.getTime()
+      : true;
+    if (changed) {
+      edits.push({ field: "CHECK_IN", old: record.checkInAt, neu: newCheckIn });
+    }
   }
   const beforeOut = record.checkOutAt;
-  if (
-    input.checkOut !== undefined &&
-    (beforeOut === null || beforeOut.getTime() !== newCheckOut!.getTime())
-  ) {
-    edits.push({ field: "CHECK_OUT", old: beforeOut, neu: newCheckOut! });
+  if (input.checkOut !== undefined && newCheckOut) {
+    const changed = beforeOut ? beforeOut.getTime() !== newCheckOut.getTime() : true;
+    if (changed) {
+      edits.push({ field: "CHECK_OUT", old: beforeOut, neu: newCheckOut });
+    }
   }
 
   if (edits.length === 0) {

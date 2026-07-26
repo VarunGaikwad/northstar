@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express, { type Request, type Response } from "express";
+import cors from "cors";
 import { env } from "./config/env";
 import { prisma } from "./db/prisma";
 import { errorHandler } from "./middleware/errorHandler";
@@ -11,9 +12,20 @@ import weatherRoutes from "./modules/weather/weather.routes";
 import lrtRoutes from "./modules/lrt/lrt.routes";
 import attendanceRoutes from "./modules/attendance/attendance.routes";
 import backgroundRoutes from "./modules/background/background.routes";
+import quoteRoutes from "./modules/quotes/quotes.routes";
 
 const app = express();
 const port = env.PORT;
+
+// CORS: allow the configured frontend origin(s) to call the API. Set
+// FRONTEND_URL to a single URL or a comma-separated list in .env.
+app.use(
+  cors({
+    origin: env.FRONTEND_URLS,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 
 // Parse JSON request bodies
 app.use(express.json());
@@ -37,6 +49,7 @@ app.use("/api/weather", weatherRoutes);
 app.use("/api/lrt", lrtRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/background", backgroundRoutes);
+app.use("/api/quote", quoteRoutes);
 
 // Global error handler
 app.use(errorHandler);

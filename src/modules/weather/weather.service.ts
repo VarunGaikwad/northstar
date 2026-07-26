@@ -1,41 +1,14 @@
 import { ApiError } from "../../utils/ApiError";
-import type { WeatherConditions, WeatherLocation, WeatherResponse } from "./weather.types";
-
-// ── WMO weather code → English description ──────────────────────────
-const WMO_CODES: Record<number, string> = {
-  0: "Clear sky",
-  1: "Mainly clear",
-  2: "Partly cloudy",
-  3: "Overcast",
-  45: "Foggy",
-  48: "Depositing rime fog",
-  51: "Light drizzle",
-  53: "Moderate drizzle",
-  55: "Dense drizzle",
-  56: "Light freezing drizzle",
-  57: "Dense freezing drizzle",
-  61: "Slight rain",
-  63: "Moderate rain",
-  65: "Heavy rain",
-  66: "Light freezing rain",
-  67: "Heavy freezing rain",
-  71: "Slight snow",
-  73: "Moderate snow",
-  75: "Heavy snow",
-  77: "Snow grains",
-  80: "Slight rain showers",
-  81: "Moderate rain showers",
-  82: "Violent rain showers",
-  85: "Slight snow showers",
-  86: "Heavy snow showers",
-  95: "Thunderstorm",
-  96: "Thunderstorm with slight hail",
-  99: "Thunderstorm with heavy hail",
-};
-
-function weatherCodeDescription(code: number): string {
-  return WMO_CODES[code] ?? "Unknown";
-}
+import { env } from "../../config/env";
+import type {
+  WeatherConditions,
+  WeatherLocation,
+  WeatherResponse,
+  WeatherCondition,
+  WeatherMain,
+  WeatherWind,
+  WeatherSys,
+} from "./weather.types";
 
 // ── IP geolocation via ip-api.com ────────────────────────────────────
 async function locateByIp(ip: string): Promise<WeatherLocation> {
@@ -65,46 +38,143 @@ async function locateByIp(ip: string): Promise<WeatherLocation> {
     lat: body.lat,
     lon: body.lon,
     source: "ip",
+    cityId: null,
+    timezone: null,
   };
 }
 
-// ── Open‑Meteo weather fetch ─────────────────────────────────────────
-async function fetchWeather(lat: number, lon: number): Promise<WeatherConditions> {
+// ── OpenWeatherMap current conditions fetch ──────────────────────────
+async function fetchWeather(
+  lat: number,
+  lon: number,
+): Promise<{
+  weather: WeatherConditions;
+  conditions: WeatherCondition[];
+  main: WeatherMain;
+  wind: WeatherWind;
+  clouds: { all: number };
+  rain?: { "1h": number };
+  sys: WeatherSys;
+  base: string;
+  cod: number;
+  cityName: string;
+  cityId: number;
+  timezone: number;
+}> {
+  const apiKey = env.OPENWEATHER_API_KEY;
+  if (!apiKey) {
+    throw new ApiError("OPENWEATHER_API_KEY is not configured", 500);
+  }
+
   const params = new URLSearchParams({
-    latitude: lat.toString(),
-    longitude: lon.toString(),
-    current: "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m",
-    timezone: "auto",
+    lat: lat.toString(),
+    lon: lon.toString(),
+    appid: apiKey,
+    units: "metric",
   });
 
-  const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+  const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?${params}`);
 
   if (!res.ok) {
     const msg = await res.text().catch(() => "Unknown error");
-    throw new ApiError(`Weather API error: ${msg}`, 502);
+    throw new ApiError(`OpenWeatherMap API error: ${msg}`, 502);
   }
 
   const body = (await res.json()) as {
-    current: {
-      temperature_2m: number;
-      relative_humidity_2m: number;
-      apparent_temperature: number;
-      weather_code: number;
-      wind_speed_10m: number;
-      wind_direction_10m: number;
+    base: string;
+    clouds: { all: number };
+    cod: number;
+    dt: number;
+    id: number;
+    name: string;
+    timezone: number;
+    visibility: number;
+    weather: { id: number; main: string; description: string; icon: string }[];
+    main: {
+      temp: number;
+      feels_like: number;
+      temp_min: number;
+      temp_max: number;
+      pressure: number;
+      humidity: number;
+      sea_level?: number;
+      grnd_level?: number;
     };
+    wind: { speed: number; deg: number; gust?: number };
+    rain?: { "1h": number };
+    sys: { country: string; sunrise: number; sunset: number };
   };
 
-  const c = body.current;
+  const w = body.weather[0];
+
+  const weather: WeatherConditions = {
+    temperature: Math.round(body.main.temp * 10) / 10,
+    feelsLike: Math.round(body.main.feels_like * 10) / 10,
+    condition: w.description,
+    conditionCode: w.id,
+    conditionMain: w.main,
+    conditionIcon: w.icon,
+    humidity: body.main.humidity,
+    pressure: body.main.pressure,
+    seaLevel: body.main.sea_level,
+    grndLevel: body.main.grnd_level,
+    tempMin: Math.round(body.main.temp_min * 10) / 10,
+    tempMax: Math.round(body.main.temp_max * 10) / 10,
+    visibility: body.visibility,
+    windSpeed: body.wind.speed,
+    windDirection: body.wind.deg,
+    windGust: body.wind.gust,
+    cloudCoverage: body.clouds.all,
+    rain1h: body.rain?.["1h"],
+    sunrise: body.sys.sunrise,
+    sunset: body.sys.sunset,
+    country: body.sys.country,
+    timestamp: body.dt,
+  };
+
+  const conditions: WeatherCondition[] = body.weather.map((c) => ({
+    id: c.id,
+    main: c.main,
+    description: c.description,
+    icon: c.icon,
+  }));
+
+  const main: WeatherMain = {
+    temp: Math.round(body.main.temp * 10) / 10,
+    feelsLike: Math.round(body.main.feels_like * 10) / 10,
+    tempMin: Math.round(body.main.temp_min * 10) / 10,
+    tempMax: Math.round(body.main.temp_max * 10) / 10,
+    pressure: body.main.pressure,
+    humidity: body.main.humidity,
+    seaLevel: body.main.sea_level,
+    grndLevel: body.main.grnd_level,
+  };
+
+  const wind: WeatherWind = {
+    speed: body.wind.speed,
+    deg: body.wind.deg,
+    gust: body.wind.gust,
+  };
+
+  const sys: WeatherSys = {
+    country: body.sys.country,
+    sunrise: body.sys.sunrise,
+    sunset: body.sys.sunset,
+  };
 
   return {
-    temperature: c.temperature_2m,
-    feelsLike: c.apparent_temperature,
-    condition: weatherCodeDescription(c.weather_code),
-    conditionCode: c.weather_code,
-    humidity: c.relative_humidity_2m,
-    windSpeed: c.wind_speed_10m,
-    windDirection: c.wind_direction_10m,
+    weather,
+    conditions,
+    main,
+    wind,
+    clouds: { all: body.clouds.all },
+    rain: body.rain,
+    sys,
+    base: body.base,
+    cod: body.cod,
+    cityName: body.name,
+    cityId: body.id,
+    timezone: body.timezone,
   };
 }
 
@@ -125,13 +195,33 @@ export async function getWeather(
       lat,
       lon,
       source: "user",
+      cityId: null,
+      timezone: null,
     };
   } else {
     location = await locateByIp(clientIp);
   }
 
   // 2. Fetch weather
-  const weather = await fetchWeather(location.lat, location.lon);
+  const {
+    weather,
+    conditions,
+    main,
+    wind,
+    clouds,
+    rain,
+    sys,
+    base,
+    cod,
+    cityName,
+    cityId,
+    timezone,
+  } = await fetchWeather(location.lat, location.lon);
 
-  return { location, weather };
+  // 3. Fill city name + ids from OWM
+  location.city = cityName || location.city;
+  location.cityId = cityId ?? null;
+  location.timezone = timezone ?? null;
+
+  return { location, weather, conditions, main, wind, clouds, rain, sys, base, cod };
 }

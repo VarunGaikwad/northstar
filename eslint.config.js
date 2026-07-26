@@ -93,4 +93,15 @@ module.exports = tseslint.config(
       "@typescript-eslint/no-misused-promises": "off",
     },
   },
+
+  // ── Test files: run with the built-in node:test runner. Each `test(...)`
+  //    call returns a promise handled by the runner (not awaited inline), so
+  //    relax the floating-promises rule. Keep everything else type-checked. ─
+  {
+    files: ["**/*.test.ts", "**/*.test.js"],
+    rules: {
+      "@typescript-eslint/no-floating-promises": "off",
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+    },
+  },
 );
