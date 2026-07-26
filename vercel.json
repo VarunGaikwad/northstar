@@ -3,14 +3,14 @@
   "buildCommand": "npm run prisma:generate && npm run build",
   "builds": [
     {
-      "src": "index.ts",
+      "src": "dist/index.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/(.*)",
-      "dest": "index.ts"
+      "src": "/api/(.*)",
+      "dest": "dist/index.js"
     }
   ]
 }
