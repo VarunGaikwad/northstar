@@ -5,8 +5,8 @@
     "moduleResolution": "node16",
     "strict": true,
     "esModuleInterop": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
+    "outDir": "dist",
     "skipLibCheck": true,
     "resolveJsonModule": true
   },

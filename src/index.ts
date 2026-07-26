@@ -1,18 +1,18 @@
+import cors from "cors";
 import "dotenv/config";
 import express, { type Request, type Response } from "express";
-import cors from "cors";
 import { env } from "./config/env";
 import { prisma } from "./db/prisma";
 import { errorHandler } from "./middleware/errorHandler";
-import authRoutes from "./modules/auth/auth.routes";
-import userRoutes from "./modules/users/users.routes";
-import folderRoutes from "./modules/folders/folders.routes";
-import favlinkRoutes from "./modules/favlinks/favlinks.routes";
-import weatherRoutes from "./modules/weather/weather.routes";
-import lrtRoutes from "./modules/lrt/lrt.routes";
 import attendanceRoutes from "./modules/attendance/attendance.routes";
+import authRoutes from "./modules/auth/auth.routes";
 import backgroundRoutes from "./modules/background/background.routes";
+import favlinkRoutes from "./modules/favlinks/favlinks.routes";
+import folderRoutes from "./modules/folders/folders.routes";
+import lrtRoutes from "./modules/lrt/lrt.routes";
 import quoteRoutes from "./modules/quotes/quotes.routes";
+import userRoutes from "./modules/users/users.routes";
+import weatherRoutes from "./modules/weather/weather.routes";
 
 const app = express();
 const port = env.PORT;
@@ -23,8 +23,8 @@ app.use(
   cors({
     origin: env.FRONTEND_URLS,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  }),
+    allowedHeaders: ["Content-Type", "Authorization"]
+  })
 );
 
 // Parse JSON request bodies
