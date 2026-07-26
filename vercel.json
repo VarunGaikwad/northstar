@@ -1,7 +1,16 @@
 {
   "version": 2,
   "buildCommand": "npm run prisma:generate && npm run build",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/api" }
+  "builds": [
+    {
+      "src": "dist/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "dist/index.js"
+    }
   ]
 }
