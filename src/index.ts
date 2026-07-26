@@ -66,8 +66,6 @@ process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
 export default app;
 
-if (!process.env.VERCEL) {
-  app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-  });
-}
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
+});
