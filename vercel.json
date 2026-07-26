@@ -1,18 +1,15 @@
 {
   "version": 2,
-  "name": "northstar-backend",
-  "buildCommand": "npm run prisma:generate && npm run build",
-  "installCommand": "npm install",
   "builds": [
     {
-      "src": "dist\\index.js",
+      "src": "src/index.ts",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "dist\\index.js"
+      "dest": "src/index.ts"
     }
   ]
 }
