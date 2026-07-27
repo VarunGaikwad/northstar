@@ -18,7 +18,19 @@ const app = express();
 
 app.use(
   cors({
-    origin: env.FRONTEND_URLS,
+    origin: (origin, callback) => {
+      // Chrome extensions may have different IDs.
+      if (!origin || origin.startsWith("chrome-extension://")) {
+        return callback(null, true);
+      }
+
+      // Allow your web frontend
+      if (env.FRONTEND_URLS.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"]
   })
