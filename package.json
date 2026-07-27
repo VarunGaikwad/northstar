@@ -40,6 +40,7 @@
   "scripts": {
     "dev": "nodemon --watch src --exec ts-node src/index.ts",
     "build": "tsc",
+    "postinstall": "prisma generate",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
