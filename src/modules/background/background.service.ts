@@ -11,7 +11,7 @@ type CacheEntry = {
 
 let cache: CacheEntry | null = null;
 
-const DEFAULT_BACKGROUND_QUERY = "beautiful Japan Incredible India";
+const DEFAULT_BACKGROUND_QUERY = "Beautiful Japan Incredible India";
 const RANDOM_PHOTO_COUNT = 30;
 
 function getUtcDateKey(): string {
@@ -21,6 +21,7 @@ function getUtcDateKey(): string {
 
 function getUtcDayIndex(): number {
   const now = new Date();
+  now.setHours(0, 0, 0, 0); // midnight UTC
   return Math.floor(now.getTime() / 86_400_000); // whole UTC days since epoch
 }
 
@@ -59,24 +60,26 @@ function photoItemToImage(body: UnsplashPhotoItem): BackgroundImage {
     photographer: {
       name: body.user.name,
       username: body.user.username,
-      profileUrl: body.user.links.html,
-    },
+      profileUrl: body.user.links.html
+    }
   };
 }
 
 // ── Unsplash random photo fetch ──────────────────────────────────────
-async function fetchRandomPhoto(query: string | undefined): Promise<BackgroundImage> {
+async function fetchRandomPhoto(
+  query: string | undefined
+): Promise<BackgroundImage> {
   const params = new URLSearchParams({
     orientation: "landscape",
     count: String(RANDOM_PHOTO_COUNT),
-    ...(query ? { query } : {}),
+    ...(query ? { query } : {})
   });
 
   const res = await fetch(`https://api.unsplash.com/photos/random?${params}`, {
     headers: {
       Authorization: `Client-ID ${env.UNSPLASH_ACCESS_KEY}`,
-      "Accept-Version": "v1",
-    },
+      "Accept-Version": "v1"
+    }
   });
 
   if (!res.ok) {
@@ -87,7 +90,9 @@ async function fetchRandomPhoto(query: string | undefined): Promise<BackgroundIm
   const rawBody = (await res.json()) as unknown;
 
   // Unsplash returns an array when `count` is supplied, a single object when it is not.
-  const photos: UnsplashPhotoItem[] = Array.isArray(rawBody) ? (rawBody as UnsplashPhotoItem[]) : [rawBody as UnsplashPhotoItem];
+  const photos: UnsplashPhotoItem[] = Array.isArray(rawBody)
+    ? (rawBody as UnsplashPhotoItem[])
+    : [rawBody as UnsplashPhotoItem];
   if (photos.length === 0) {
     throw new ApiError("Unsplash returned no photos", 502);
   }
@@ -99,7 +104,9 @@ async function fetchRandomPhoto(query: string | undefined): Promise<BackgroundIm
 }
 
 // ── Public service function ──────────────────────────────────────────
-export async function getBackground(query: string | undefined): Promise<BackgroundResponse> {
+export async function getBackground(
+  query: string | undefined
+): Promise<BackgroundResponse> {
   const effectiveQuery = query?.trim() || DEFAULT_BACKGROUND_QUERY;
   const dateKey = getUtcDateKey();
   const queryKey = buildQueryKey(effectiveQuery);
