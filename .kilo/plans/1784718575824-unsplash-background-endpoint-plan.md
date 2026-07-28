@@ -15,6 +15,7 @@ Add a public endpoint `GET /api/background` that returns a 1920×1080 Unsplash i
 | Dimensions | `1920` × `1080`, `fit=crop` on Unsplash raw CDN URL |
 | API used | `GET https://api.unsplash.com/photos/random` |
 | Rate-limit protection | In-memory daily cache (one image per UTC day) |
+| Daily variety | Fetch up to 30 random candidates and pick one deterministically by UTC day index |
 | Missing key behavior | Throw `ApiError` 500 if `UNSPLASH_ACCESS_KEY` is not set at startup |
 | API failure behavior | Throw `ApiError` 502 with Unsplash error text |
 
@@ -42,12 +43,13 @@ UNSPLASH_ACCESS_KEY: getEnvVar("UNSPLASH_ACCESS_KEY"),
 - Use `fetch` to call Unsplash `/photos/random`.
 - Query params:
   - `orientation=landscape`
-  - `w=1920`
-  - `h=1080`
+  - `count=30`
   - `query=${query ?? defaultQuery}`
 - Headers:
   - `Authorization: Client-ID ${env.UNSPLASH_ACCESS_KEY}`
   - `Accept-Version: v1`
+- Unsplash returns an array of up to 30 candidates.
+- Pick one candidate by `getUtcDayIndex() % photos.length` so the wallpaper changes every UTC day even when Unsplash's random endpoint is biased toward the same first result.
 - Build final wallpaper URL from `urls.raw`:
   ```
   ${urls.raw}&w=1920&h=1080&fit=crop&q=80
