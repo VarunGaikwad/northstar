@@ -11,7 +11,7 @@ type CacheEntry = {
 
 let cache: CacheEntry | null = null;
 
-const DEFAULT_BACKGROUND_QUERY = "Beautiful Japan Incredible India";
+const DEFAULT_BACKGROUND_QUERY = "Japan";
 const RANDOM_PHOTO_COUNT = 30;
 
 function getUtcDateKey(): string {
@@ -107,7 +107,8 @@ async function fetchRandomPhoto(
 export async function getBackground(
   query: string | undefined
 ): Promise<BackgroundResponse> {
-  const effectiveQuery = query?.trim() || DEFAULT_BACKGROUND_QUERY;
+  const effectiveQuery =
+    query?.trim() || encodeURIComponent(DEFAULT_BACKGROUND_QUERY);
   const dateKey = getUtcDateKey();
   const queryKey = buildQueryKey(effectiveQuery);
 
