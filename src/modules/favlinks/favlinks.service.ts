@@ -55,7 +55,10 @@ export async function list(userId: string, folderId: string | null): Promise<Fav
   }
 
   return prisma.favLink.findMany({
-    where: { userId, folderId },
+    where: {
+      userId,
+      ...(typeof folderId === "string" ? { folderId } : {}),
+    },
     select: favlinkSelect,
     orderBy: { createdAt: "desc" },
   });
