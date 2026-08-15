@@ -66,7 +66,7 @@ export function TopNav({
           label="Log out"
           variant="danger"
           size="sm"
-          onClick={logout}
+          onClick={() => void logout().catch(() => undefined)}
         />
       </div>
     </nav>

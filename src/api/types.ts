@@ -13,11 +13,17 @@ export interface User {
   isVerified: boolean;
   isActive: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface AuthResponse {
   user: User;
   accessToken: string;
+  accessTokenExpiresAt: string;
+  session: {
+    idleExpiresAt: string;
+    absoluteExpiresAt: string;
+  };
 }
 
 export interface Folder {

@@ -1,4 +1,4 @@
-import { USER_KEY } from "./client";
+import { getAuthState } from "../auth/session";
 
 interface CacheEntry<T> {
   version: number;
@@ -13,13 +13,7 @@ function cacheKey(name: string, userId?: string): string {
 }
 
 export function currentUserId(): string | null {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    const user = raw ? (JSON.parse(raw) as { id?: unknown }) : null;
-    return typeof user?.id === "string" ? user.id : null;
-  } catch {
-    return null;
-  }
+  return getAuthState().user?.id ?? null;
 }
 
 export function readPersistentCache<T>(name: string, userId?: string | null): CacheEntry<T> | null {

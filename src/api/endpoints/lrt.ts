@@ -1,5 +1,5 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { apiGet } from "../client";
+import { apiPublicGet } from "../client";
 import { readPersistentCache, writePersistentCache } from "../persistentCache";
 import { tokyoDate } from "../timeFormat";
 import type { LrtRouteSearchResponse, LrtStationsResponse } from "../types";
@@ -10,7 +10,7 @@ export const lrtStationsQuery = () =>
   queryOptions({
     queryKey: ["lrt", "stations"],
     queryFn: async () => {
-      const data = await apiGet<LrtStationsResponse>("/lrt/stations");
+      const data = await apiPublicGet<LrtStationsResponse>("/lrt/stations");
       writePersistentCache("lrt-stations", data);
       return data;
     },
@@ -29,7 +29,7 @@ export function lrtSearchQuery({ from, to, date = tokyoDate() }: { from: string 
   return queryOptions({
     queryKey: ["lrt", "search", String(from), String(to), date],
     queryFn: async () => {
-      const data = await apiGet<LrtRouteSearchResponse>(`/lrt/search?${params.toString()}`);
+      const data = await apiPublicGet<LrtRouteSearchResponse>(`/lrt/search?${params.toString()}`);
       writePersistentCache("lrt-route", { from: String(from), to: String(to), date, data });
       return data;
     },

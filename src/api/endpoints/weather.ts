@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useGeolocation } from "../../hooks/useGeolocation";
-import { apiGet } from "../client";
+import { apiPublicGet } from "../client";
 import type { WeatherResponse } from "../types";
 
 export function useWeather(lat?: number, lon?: number) {
@@ -13,7 +13,7 @@ export function useWeather(lat?: number, lon?: number) {
 
   return useQuery({
     queryKey: ["weather", effectiveLat ?? "auto", effectiveLon ?? "auto"],
-    queryFn: () => apiGet<WeatherResponse>(`/weather${params}`),
+    queryFn: () => apiPublicGet<WeatherResponse>(`/weather${params}`),
     enabled: (lat !== undefined || lon !== undefined || !geo.isLoading) && hasCoords,
     refetchInterval: 600_000,
   });

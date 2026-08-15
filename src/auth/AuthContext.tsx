@@ -1,88 +1,126 @@
-import { createContext, useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { clearUserPersistentCache } from "../api/persistentCache";
 import { queryClient } from "../api/queryClient";
-import type { User } from "../api/types";
-
-const TOKEN_KEY = "auth.token";
-const USER_KEY = "auth.user";
+import type { AuthResponse, User } from "../api/types";
+import {
+  RefreshRejectedError,
+  applyAuthData,
+  getAuthState,
+  initializeAuthSession,
+  logoutAllSessions,
+  logoutSession,
+  restoreVisibleSession,
+  subscribeAuth,
+} from "./session";
 
 interface AuthContextValue {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  isInitializing: boolean;
+  restoreError: string | null;
   expired: boolean;
   clearExpired: () => void;
-  setSession: (user: User, token: string) => void;
-  logout: () => void;
+  retryRestore: () => Promise<void>;
+  setSession: (data: AuthResponse) => void;
+  logout: () => Promise<void>;
+  logoutAll: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function readStoredUser(): User | null {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as User;
-  } catch {
-    return null;
-  }
-}
-
-function readStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(readStoredUser);
-  const [token, setToken] = useState<string | null>(readStoredToken);
+  const auth = useSyncExternalStore(subscribeAuth, getAuthState, getAuthState);
+  const previousUserId = useRef<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
 
-  const setSession = useCallback((newUser: User, newToken: string) => {
-    if (user && user.id !== newUser.id) {
-      clearUserPersistentCache(user.id);
-      queryClient.removeQueries({ queryKey: ["favlinks", user.id] });
-      queryClient.removeQueries({ queryKey: ["folders", user.id] });
+  const retryRestore = useCallback(async () => {
+    setRestoreError(null);
+    try {
+      await restoreVisibleSession();
+    } catch (error) {
+      if (!(error instanceof RefreshRejectedError)) {
+        setRestoreError(
+          error instanceof Error ? error.message : "Unable to restore the session",
+        );
+      }
+    } finally {
+      setIsInitializing(false);
     }
-    localStorage.setItem(USER_KEY, JSON.stringify(newUser));
-    localStorage.setItem(TOKEN_KEY, newToken);
-    setUser(newUser);
-    setToken(newToken);
-    setExpired(false);
-  }, [user]);
-
-  const logout = useCallback(() => {
-    if (user) {
-      clearUserPersistentCache(user.id);
-      queryClient.removeQueries({ queryKey: ["favlinks", user.id] });
-      queryClient.removeQueries({ queryKey: ["folders", user.id] });
-    }
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(TOKEN_KEY);
-    setUser(null);
-    setToken(null);
-  }, [user]);
-
-  const clearExpired = useCallback(() => setExpired(false), []);
+  }, []);
 
   useEffect(() => {
-    const onExpired = () => {
-      setExpired(true);
-      logout();
+    let cancelled = false;
+
+    const initialize = async () => {
+      await initializeAuthSession();
+      if (!cancelled) await retryRestore();
     };
+    void initialize();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [retryRestore]);
+
+  useEffect(() => {
+    const restoreWhenVisible = () => {
+      if (document.visibilityState === "visible") void retryRestore();
+    };
+    document.addEventListener("visibilitychange", restoreWhenVisible);
+    return () => document.removeEventListener("visibilitychange", restoreWhenVisible);
+  }, [retryRestore]);
+
+  useEffect(() => {
+    const onExpired = () => setExpired(true);
     window.addEventListener("auth:expired", onExpired);
     return () => window.removeEventListener("auth:expired", onExpired);
-  }, [logout]);
+  }, []);
+
+  useEffect(() => {
+    const currentUserId = auth.user?.id ?? null;
+    const oldUserId = previousUserId.current;
+    if (oldUserId && oldUserId !== currentUserId) {
+      clearUserPersistentCache(oldUserId);
+      queryClient.removeQueries({ queryKey: ["favlinks", oldUserId] });
+      queryClient.removeQueries({ queryKey: ["folders", oldUserId] });
+      queryClient.removeQueries({ queryKey: ["me"] });
+    }
+    previousUserId.current = currentUserId;
+  }, [auth.user]);
+
+  const setSession = useCallback((data: AuthResponse) => {
+    applyAuthData(data);
+    setExpired(false);
+    setRestoreError(null);
+  }, []);
+
+  const clearExpired = useCallback(() => setExpired(false), []);
 
   return (
     <AuthContext.Provider
       value={{
-        user,
-        token,
-        isAuthenticated: user !== null && token !== null,
+        user: auth.user,
+        token: auth.accessToken,
+        isAuthenticated: auth.user !== null && auth.accessToken !== null,
+        isInitializing,
+        restoreError,
         expired,
         clearExpired,
+        retryRestore,
         setSession,
-        logout,
+        logout: logoutSession,
+        logoutAll: logoutAllSessions,
       }}
     >
       {children}

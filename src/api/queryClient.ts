@@ -7,7 +7,7 @@ export const queryClient = new QueryClient({
       staleTime: 30_000,
       refetchOnWindowFocus: true,
       retry: (count, err) => {
-        if (err instanceof HttpError && err.status === 401) return false;
+        if (err instanceof HttpError && err.status >= 400 && err.status < 500) return false;
         return count < 1;
       },
     },

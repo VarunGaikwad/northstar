@@ -54,7 +54,7 @@ export function AuthScreen() {
     setError(null);
     try {
       const data = await login.mutateAsync({ email, password });
-      setSession(data.user, data.accessToken);
+      setSession(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     }
@@ -70,7 +70,7 @@ export function AuthScreen() {
         firstName,
         lastName,
       });
-      setSession(data.user, data.accessToken);
+      setSession(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
     }
