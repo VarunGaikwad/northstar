@@ -24,12 +24,32 @@ model User {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  folders     Folder[]
-  favlinks    FavLink[]
-  attendance  Attendance[] @relation("UserAttendance")
+  folders      Folder[]
+  favlinks     FavLink[]
+  attendance   Attendance[]  @relation("UserAttendance")
+  authSessions AuthSession[]
 
   @@index([isActive])
   @@index([resetToken])
+}
+
+model AuthSession {
+  id                String    @id @default(cuid())
+  userId            String
+  refreshVersion    Int       @default(0)
+  refreshIssuedAt   DateTime
+  lastUsedAt        DateTime
+  idleExpiresAt     DateTime
+  absoluteExpiresAt DateTime
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([idleExpiresAt])
+  @@index([absoluteExpiresAt])
 }
 
 model Folder {
@@ -58,8 +78,8 @@ model FavLink {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  folder Folder?  @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder Folder? @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([folderId])
@@ -84,29 +104,29 @@ model LrtStation {
 }
 
 model LrtTrip {
-  id             String       @id @default(cuid())
-  dayType        LrtDayType
-  direction      LrtDirection
-  trainType      LrtTrainType
-  tripIndex      Int
+  id              String        @id @default(cuid())
+  dayType         LrtDayType
+  direction       LrtDirection
+  trainType       LrtTrainType
+  tripIndex       Int
   firstDepartMins Int
-  createdAt      DateTime     @default(now())
-  stopTimes      LrtStopTime[]
+  createdAt       DateTime      @default(now())
+  stopTimes       LrtStopTime[]
 
   @@unique([dayType, direction, tripIndex])
   @@index([dayType, direction])
 }
 
 model LrtStopTime {
-  id            String       @id @default(cuid())
+  id            String      @id @default(cuid())
   tripId        String
-  trip          LrtTrip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  trip          LrtTrip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
   stationId     String
-  station       LrtStation   @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  station       LrtStation  @relation(fields: [stationId], references: [id], onDelete: Cascade)
   stopSequence  Int
   arrivalMins   Int?
   departureMins Int?
-  isNextDay     Boolean      @default(false)
+  isNextDay     Boolean     @default(false)
   stopType      LrtStopType
 
   @@unique([tripId, stationId])
@@ -140,15 +160,15 @@ enum LrtStopType {
 // One check-in + one check-out per user per day (in the record's timezone).
 // ───────────────────────────────────────────────────────────────
 model Attendance {
-  id         String   @id @default(cuid())
+  id         String           @id @default(cuid())
   userId     String
-  user       User     @relation("UserAttendance", fields: [userId], references: [id], onDelete: Cascade)
-  date       String   // YYYY-MM-DD in the record's timezone
-  timezone   String   @default("UTC") // IANA tz name (e.g. Asia/Tokyo)
+  user       User             @relation("UserAttendance", fields: [userId], references: [id], onDelete: Cascade)
+  date       String // YYYY-MM-DD in the record's timezone
+  timezone   String           @default("UTC") // IANA tz name (e.g. Asia/Tokyo)
   checkInAt  DateTime?
   checkOutAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
   edits      AttendanceEdit[]
 
   @@unique([userId, date])
@@ -160,7 +180,7 @@ model AttendanceEdit {
   id           String          @id @default(cuid())
   attendanceId String
   attendance   Attendance      @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
-  userId       String          // who performed the edit (plain column, no FK)
+  userId       String // who performed the edit (plain column, no FK)
   field        AttendanceField
   oldValue     DateTime?
   newValue     DateTime?

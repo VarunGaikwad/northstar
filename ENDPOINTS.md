@@ -37,7 +37,7 @@ endpoint. Endpoint-specific details are in the sections below.
 
 ### CORS
 
-The backend **does** enable CORS via the `cors` middleware, gated by the `FRONTEND_URL` env var.
+The backend enables credentialed CORS with an exact origin allowlist.
 
 - `FRONTEND_URL` accepts a **single URL or a comma-separated list** of allowed origins. Every listed origin may call the API from a browser; unlisted origins are blocked. The browser's actual request origin is reflected back in `Access-Control-Allow-Origin`, and a `Vary: Origin` header is sent.
   ```env
@@ -47,23 +47,38 @@ The backend **does** enable CORS via the `cors` middleware, gated by the `FRONTE
   FRONTEND_URL="http://localhost:5173,http://localhost:3001,https://app.example.com"
   ```
 - The **first** entry in the list is the canonical frontend URL used to build password-reset email links, so keep your primary production frontend first.
+- `CHROME_EXTENSION_ORIGINS` is a comma-separated list of exact Manifest V3 origins such as `chrome-extension://<32-character-id>`. Wildcards and arbitrary extension IDs are rejected.
+- Register, login, refresh, and logout browser requests must use `credentials: "include"`; otherwise the browser ignores `Set-Cookie` and does not send the refresh credential.
 - If your frontend runs on an origin **not** in `FRONTEND_URL`, the browser will block the responses. You can either add it to `FRONTEND_URL`, or in dev use a **Vite/webpack dev-server proxy** forwarding `/api` to the backend (e.g. Vite `server.proxy['/api'] = { target: 'http://localhost:3000', changeOrigin: true }`) so requests share the frontend's origin.
 
 ### Authentication model
 
-The API uses **Bearer JWT** access tokens. There is **no refresh-token endpoint**.
+The API uses a short-lived **Bearer JWT** access token plus a rotating, database-backed refresh session.
 
-**Obtaining a token** — call `/api/auth/login` (or `/api/auth/register`); the token is returned **only** in the JSON response body (there is no `Set-Cookie` header):
+**Obtaining a token** — call `/api/auth/login` (or `/api/auth/register`) with credentials included. The access token is returned in JSON and the refresh token is set only as an HttpOnly cookie:
 ```json
-{ "success": true, "data": { "user": { ... }, "accessToken": "eyJ..." } }
+{
+  "success": true,
+  "data": {
+    "user": { "id": "..." },
+    "accessToken": "eyJ...",
+    "accessTokenExpiresAt": "2026-08-15T00:15:00.000Z",
+    "session": {
+      "idleExpiresAt": "2026-09-14T00:00:00.000Z",
+      "absoluteExpiresAt": "2027-02-11T00:00:00.000Z"
+    }
+  }
+}
 ```
 
-**Sending a token** — store `accessToken` (e.g. in `localStorage` or a JS-readable cookie) and attach it to every protected request:
+**Sending a token** — keep `accessToken` in memory and attach it to every protected request:
 ```http
 Authorization: Bearer <accessToken>
 ```
 
-**Token lifetime** — **7 days** by default (env `JWT_EXPIRES_IN`). After expiry the token is rejected with `401 "Invalid or expired token"` and the user must **log in again** (no silent refresh). Plan your UI to catch `401` and redirect to the login screen.
+**Session policy** — access tokens last **15 minutes** by default. A successful visible-use refresh extends the inactivity deadline to 30 days from that refresh, capped by the fixed 180-day absolute deadline created at login. An already-issued access token can remain usable for at most its remaining lifetime after logout or session revocation.
+
+The refresh credential is never returned in JSON and must not be stored or read by JavaScript. Production sets a host-only `HttpOnly; Secure; SameSite=None; Path=/` cookie. Local development uses a non-secure `SameSite=Lax` variant for localhost web testing.
 
 **JWT payload** (for debugging only — do not rely on the client reading it):
 ```json
@@ -98,21 +113,27 @@ List endpoints put the array inside `data`; mutation endpoints put the created/u
 ### Suggested auth flow on the client
 
 ```
-1. POST /api/auth/login                -> store data.accessToken + data.user
-2. Attach `Authorization: Bearer <token>` to a shared fetch/axios instance
-3. On any 401 response  -> clear token, redirect to /login
-4. For workflows: GET /api/users/me to hydrate the session/profile
-5. Password reset: POST forgot-password -> (user clicks email link) -> POST reset-password -> re-login
+1. POST /api/auth/login with credentials included -> keep data.accessToken + data.user in memory
+2. Attach `Authorization: Bearer <token>` to protected requests
+3. On visible app start/resume or one protected-request 401 -> single-flight POST /api/auth/refresh
+4. Retry the original protected request at most once with the new access token
+5. Clear auth only on a refresh 401; keep the session retryable on network errors and 5xx
+6. POST /api/auth/logout even if the access token expired, then clear local state
 ```
+
+Do not run hidden-tab refresh intervals. Coordinate tabs with Web Locks or `BroadcastChannel`; the server also tolerates the immediately previous refresh generation for 10 seconds. A Manifest V3 extension must make credentialed calls from its service worker or extension pages, use an exact API `host_permissions` entry, and store access tokens in `chrome.storage.session`. It does not need the `cookies` permission.
+
+Legacy seven-day access JWTs issued before this rollout continue working until their embedded expiry. They have no refresh session and require one final interactive login; after renewable login succeeds, remove legacy persistent token storage.
 
 ### Suggested fetch wrapper
 
 ```ts
 const API = {
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = localStorage.getItem('accessToken');
+    const token = authState.accessToken; // in-memory state
     const res = await fetch(`/api${path}`, {
       ...init,
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -157,7 +178,10 @@ Prefix: `/api/auth`
 | Method | Path                | Auth | Description                                                     |
 |--------|---------------------|------|-----------------------------------------------------------------|
 | POST   | `/api/auth/register` | No   | Create a new user account                                       |
-| POST   | `/api/auth/login`    | No   | Authenticate and receive an access token                        |
+| POST   | `/api/auth/login`    | No   | Authenticate and create a renewable session                     |
+| POST   | `/api/auth/refresh`  | Refresh cookie | Rotate the current refresh credential and issue an access token |
+| POST   | `/api/auth/logout`   | Refresh cookie if present | Revoke the current session idempotently                |
+| POST   | `/api/auth/logout-all` | Bearer access token | Revoke all sessions for the current user              |
 | POST   | `/api/auth/forgot-password` | No | Request a password reset (sends email if account exists)        |
 | POST   | `/api/auth/reset-password` | No | Reset password using a token from the reset email               |
 
@@ -195,10 +219,17 @@ Prefix: `/api/auth`
       "isActive": true,
       "createdAt": "2025-01-01T00:00:00.000Z"
     },
-    "accessToken": "eyJ..."
+    "accessToken": "eyJ...",
+    "accessTokenExpiresAt": "2026-08-15T00:15:00.000Z",
+    "session": {
+      "idleExpiresAt": "2026-09-14T00:00:00.000Z",
+      "absoluteExpiresAt": "2027-02-11T00:00:00.000Z"
+    }
   }
 }
 ```
+
+The response also sets the rotating refresh credential as an HttpOnly cookie. Browser requests must include credentials and come from a configured exact origin.
 
 **Error `409`** — duplicate email
 ```json
@@ -215,7 +246,7 @@ Prefix: `/api/auth`
 }
 ```
 
-**Response `200`** — same shape as register (`user` + `accessToken`)
+**Response `200`** — same shape and refresh cookie behavior as register.
 
 **Error `401`**
 ```json
@@ -226,6 +257,53 @@ Prefix: `/api/auth`
 ```json
 { "success": false, "error": "Account is deactivated" }
 ```
+
+### POST `/api/auth/refresh`
+
+No request body or bearer token is required. The browser sends the HttpOnly refresh cookie with `credentials: "include"`. A successful request atomically rotates the credential, advances the 30-day idle deadline up to the 180-day absolute cap, and returns the same data shape as login with current user email and role claims.
+
+**Response `200`**
+```json
+{
+  "success": true,
+  "data": {
+    "user": { "id": "clx...", "email": "user@example.com", "role": "USER" },
+    "accessToken": "eyJ...",
+    "accessTokenExpiresAt": "2026-08-15T00:15:00.000Z",
+    "session": {
+      "idleExpiresAt": "2026-09-14T00:00:00.000Z",
+      "absoluteExpiresAt": "2027-02-11T00:00:00.000Z"
+    }
+  }
+}
+```
+
+Missing, malformed, expired, revoked, reused, and inactive-user sessions all return the same `401` and clear the cookie:
+```json
+{ "success": false, "error": "Invalid or expired refresh session" }
+```
+
+A database failure returns `500`; clients must not treat it as logout. The immediately previous refresh generation can reproduce the already-current credential during a 10-second concurrent-request grace window.
+
+### POST `/api/auth/logout`
+
+Uses the refresh cookie when present, revokes only that session, and clears the cookie. Missing or malformed cookies are handled idempotently.
+
+**Response `200`**
+```json
+{ "success": true, "message": "Logged out successfully." }
+```
+
+### POST `/api/auth/logout-all`
+
+Requires `Authorization: Bearer <accessToken>`. Revokes every refresh session for the authenticated user and clears the current refresh cookie. Other already-issued access tokens can remain usable until their short expiry.
+
+**Response `200`**
+```json
+{ "success": true, "message": "Logged out from all sessions successfully." }
+```
+
+For register, login, refresh, logout, and logout-all, a present browser `Origin` must be in `FRONTEND_URL` or `CHROME_EXTENSION_ORIGINS`; otherwise the API returns `403`. Requests without `Origin`, such as Postman and server clients, remain allowed.
 
 ### POST `/api/auth/forgot-password`
 
@@ -266,6 +344,8 @@ Prefix: `/api/auth`
 ```json
 { "success": false, "error": "Invalid or expired reset token" }
 ```
+
+A successful password reset revokes all database-backed refresh sessions. Legacy access JWTs issued before the renewable-session rollout remain valid until their embedded expiry.
 
 ---
 
@@ -1229,10 +1309,15 @@ All protected endpoints use **Bearer token** authentication.
 Authorization: Bearer <accessToken>
 ```
 
-The token is a signed JWT containing:
+New access tokens are signed HS256 JWTs containing:
 - `userId` (string)
 - `email` (string)
 - `role` (string: `"USER"` or `"ADMIN"`)
+- `sessionId` (string)
+- `tokenType` (`"access"`)
+- fixed issuer and audience claims
+
+Refresh JWTs use a separate secret and audience and are accepted only from the HttpOnly cookie by auth-session endpoints. Legacy access tokens with the old exact `{ userId, email, role, iat, exp }` shape remain accepted only until their own expiry.
 
 ---
 
@@ -1267,35 +1352,38 @@ All errors follow a consistent shape:
 | 3 | GET    | `/api/weather`           | —    | Get weather (IP or coords) |
 | 4 | POST   | `/api/auth/register`     | —    | Register                   |
 | 5 | POST   | `/api/auth/login`        | —    | Login                      |
-| 6 | POST   | `/api/auth/forgot-password` | — | Forgot password            |
-| 7 | POST   | `/api/auth/reset-password`  | — | Reset password             |
-| 8 | GET    | `/api/users`             | —    | List all users             |
-| 9 | GET    | `/api/users/me`          | Yes  | Get current user           |
-|10 | POST   | `/api/folders`           | Yes  | Create folder              |
-|11 | GET    | `/api/folders`           | Yes  | List folders               |
-|12 | GET    | `/api/folders/:id`       | Yes  | Get folder by ID           |
-|13 | PATCH  | `/api/folders/:id`       | Yes  | Update folder              |
-|14 | DELETE | `/api/folders/:id`       | Yes  | Delete folder              |
-|15 | POST   | `/api/favlinks`          | Yes  | Create favlink             |
-|16 | GET    | `/api/favlinks`          | Yes  | List favlinks              |
-|17 | GET    | `/api/favlinks/:id`      | Yes  | Get favlink by ID          |
-|18 | PATCH  | `/api/favlinks/:id`      | Yes  | Update favlink             |
-|19 | DELETE | `/api/favlinks/:id`      | Yes  | Delete favlink             |
-|20 | GET    | `/api/lrt/timetable`     | —    | LRT timetable for a day    |
-|21 | GET    | `/api/lrt/stations`      | —    | LRT station list (19)      |
-|22 | GET    | `/api/lrt/search`        | —    | LRT trains from→to for a date |
-|23 | GET    | `/api/background`        | —    | Daily background image     |
-|24 | GET    | `/api/quote`             | —    | Daily quote                |
-|25 | POST   | `/api/attendance`          | Yes  | Create manual attendance for a past date |
-|26 | POST   | `/api/attendance/clock-in` | Yes  | Clock in for today            |
-|27 | POST   | `/api/attendance/clock-out`| Yes  | Clock out for today           |
-|28 | GET    | `/api/attendance/me`     | Yes  | My attendance for a day       |
-|29 | GET    | `/api/attendance/me/range`| Yes  | My attendance by date range   |
-|30 | GET    | `/api/attendance/me/month`| Yes  | My attendance for a month + summary |
-|31 | PATCH  | `/api/attendance/:id`    | Yes  | Correct check-in/out time     |
-|32 | GET    | `/api/attendance/:id/history`| Yes| Attendance correction history |
+| 6 | POST   | `/api/auth/refresh`      | Cookie | Refresh current session    |
+| 7 | POST   | `/api/auth/logout`       | Cookie | Logout current session     |
+| 8 | POST   | `/api/auth/logout-all`   | Yes  | Logout every session         |
+| 9 | POST   | `/api/auth/forgot-password` | — | Forgot password            |
+|10 | POST   | `/api/auth/reset-password`  | — | Reset password             |
+|11 | GET    | `/api/users`             | —    | List all users             |
+|12 | GET    | `/api/users/me`          | Yes  | Get current user           |
+|13 | POST   | `/api/folders`           | Yes  | Create folder              |
+|14 | GET    | `/api/folders`           | Yes  | List folders               |
+|15 | GET    | `/api/folders/:id`       | Yes  | Get folder by ID           |
+|16 | PATCH  | `/api/folders/:id`       | Yes  | Update folder              |
+|17 | DELETE | `/api/folders/:id`       | Yes  | Delete folder              |
+|18 | POST   | `/api/favlinks`          | Yes  | Create favlink             |
+|19 | GET    | `/api/favlinks`          | Yes  | List favlinks              |
+|20 | GET    | `/api/favlinks/:id`      | Yes  | Get favlink by ID          |
+|21 | PATCH  | `/api/favlinks/:id`      | Yes  | Update favlink             |
+|22 | DELETE | `/api/favlinks/:id`      | Yes  | Delete favlink             |
+|23 | GET    | `/api/lrt/timetable`     | —    | LRT timetable for a day    |
+|24 | GET    | `/api/lrt/stations`      | —    | LRT station list (19)      |
+|25 | GET    | `/api/lrt/search`        | —    | LRT trains from→to for a date |
+|26 | GET    | `/api/background`        | —    | Daily background image     |
+|27 | GET    | `/api/quote`             | —    | Daily quote                |
+|28 | POST   | `/api/attendance`          | Yes  | Create manual attendance for a past date |
+|29 | POST   | `/api/attendance/clock-in` | Yes  | Clock in for today            |
+|30 | POST   | `/api/attendance/clock-out`| Yes  | Clock out for today           |
+|31 | GET    | `/api/attendance/me`     | Yes  | My attendance for a day       |
+|32 | GET    | `/api/attendance/me/range`| Yes  | My attendance by date range   |
+|33 | GET    | `/api/attendance/me/month`| Yes  | My attendance for a month + summary |
+|34 | PATCH  | `/api/attendance/:id`    | Yes  | Correct check-in/out time     |
+|35 | GET    | `/api/attendance/:id/history`| Yes| Attendance correction history |
 
-**Total: 32 endpoints** (8 public root/weather/lrt/background/quote, 4 auth, 2 users, 5 folders, 5 favlinks, 8 attendance)
+**Total: 35 endpoints** (7 auth, 2 users, 5 folders, 5 favlinks, 8 attendance, and 8 root/public utility endpoints)
 
 ---
 
@@ -1327,7 +1415,12 @@ export interface User {
 
 export interface AuthResponse {
   user: User;
-  accessToken: string;   // JWT, 7d default lifetime
+  accessToken: string;            // short-lived JWT, 15m default
+  accessTokenExpiresAt: string;   // UTC ISO 8601
+  session: {
+    idleExpiresAt: string;        // slides on successful visible-use refresh
+    absoluteExpiresAt: string;    // fixed at login
+  };
 }
 
 // ── Folders ─────────────────────────────────────────────────────────

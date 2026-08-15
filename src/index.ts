@@ -1,8 +1,10 @@
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import express, { type Request, type Response } from "express";
 
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/errorHandler";
+import { ApiError } from "./utils/ApiError";
 
 import attendanceRoutes from "./modules/attendance/attendance.routes";
 import authRoutes from "./modules/auth/auth.routes";
@@ -19,23 +21,18 @@ const app = express();
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Chrome extensions may have different IDs.
-      if (!origin || origin.startsWith("chrome-extension://")) {
+      if (!origin || env.TRUSTED_ORIGINS.includes(origin)) {
         return callback(null, true);
       }
-
-      // Allow your web frontend
-      if (env.FRONTEND_URLS.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(new Error("Not allowed by CORS"));
+      return callback(new ApiError("Origin is not allowed", 403));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
+app.use(cookieParser());
 app.use(express.json());
 
 app.get("/health", (_req: Request, res: Response) => {

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "northstar-backend-collection",
     "name": "Northstar Backend",
-    "description": "Postman collection for the Northstar backend API.",
+    "description": "Postman collection for the Northstar backend API. Keep Postman's cookie jar enabled: login/register store the HttpOnly refresh cookie automatically, refresh rotates it, and the collection variable stores only the short-lived access token.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -39,6 +39,7 @@
     },
     {
       "name": "Auth",
+      "description": "Keep Postman's cookie jar enabled for this host. Refresh credentials remain HttpOnly cookies and are never copied into collection variables. Login, registration, and refresh automatically update only {{authToken}} from the JSON response.",
       "item": [
         {
           "name": "Register",
@@ -60,6 +61,18 @@
               "path": ["api", "auth", "register"]
             }
           },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && body.data?.accessToken) pm.collectionVariables.set('authToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ],
           "response": []
         },
         {
@@ -82,6 +95,99 @@
               "path": ["api", "auth", "login"]
             }
           },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && body.data?.accessToken) pm.collectionVariables.set('authToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Refresh Session",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Uses and rotates the HttpOnly refresh cookie in Postman's cookie jar. No refresh credential belongs in a variable or request body.",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "refresh"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success && body.data?.accessToken) pm.collectionVariables.set('authToken', body.data.accessToken);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Logout Current Session",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "description": "Revokes the session represented by the refresh cookie and clears that cookie.",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.unset('authToken');"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Logout All Sessions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "description": "Revokes every refresh session for the bearer-token user and clears the current cookie.",
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout-all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout-all"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.unset('authToken');"
+                ]
+              }
+            }
+          ],
           "response": []
         },
         {
