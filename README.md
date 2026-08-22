@@ -21,7 +21,8 @@ src/
 │       ├── users.controller.ts
 │       └── users.routes.ts
 ├── utils/            # Reusable helpers (hash, jwt, email, errors)
-└── index.ts          # App entry point
+├── index.ts          # Express app / Vercel entry point
+└── server.ts         # Standalone Node server entry point
 ```
 
 When adding a new domain, create a folder under `src/modules/` with `*.routes.ts`, `*.controller.ts`, `*.service.ts`, and optional `*.validation.ts` / `*.types.ts`. Mount the router in `src/index.ts`.
@@ -108,6 +109,12 @@ Copy `.env.example` to `.env` and fill in:
 - `BCRYPT_SALT_ROUNDS` – default `12`
 - `FRONTEND_URL` - exact comma-separated web origins; the first is used in password-reset links
 - `CHROME_EXTENSION_ORIGINS` - exact comma-separated `chrome-extension://<id>` origins; wildcards are rejected
+- `SUPABASE_URL` - Supabase project URL used lazily by Notes image operations
+- `SUPABASE_SERVICE_ROLE_KEY` - backend-only Supabase secret/service-role key
+- `SUPABASE_NOTE_IMAGES_BUCKET` - private Notes image bucket, default example `note-images`
+- `NOTE_IMAGE_READ_URL_TTL` - temporary signed read lifetime, default `15m`
+- `NOTE_TRASH_RETENTION` - automatic trash retention, default `7d`
+- `CRON_SECRET` - separate secret for the internal Notes cleanup route
 - Optional SMTP vars to send real emails; otherwise reset links are logged to the console
 
 Production refresh cookies are host-only, `HttpOnly`, `Secure`, `SameSite=None`, and use `Path=/`. Credentialed CORS reflects only configured exact origins. Local development uses a non-secure `SameSite=Lax` cookie for localhost web testing; extension cookie acceptance must be tested against HTTPS staging.
@@ -123,4 +130,5 @@ npm run start     # run compiled app
 npm run prisma:migrate   # create/run migrations
 npm run prisma:generate  # regenerate Prisma client
 npm run prisma:studio    # open Prisma Studio
+npm run setup:note-storage # create/update the private Notes image bucket
 ```

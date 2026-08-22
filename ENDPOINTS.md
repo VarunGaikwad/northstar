@@ -14,6 +14,7 @@ Base URL: `http://localhost:<PORT>` (default `3000`, configured in `.env`)
 - [Users](#users)
 - [Folders](#folders)
 - [FavLinks](#favlinks)
+- [Notes](#notes)
 - [Weather](#weather)
 - [LRT Timetable](#lrt-timetable)
 - [Background](#background)
@@ -97,7 +98,7 @@ Every endpoint returns JSON. Successful responses:
 { "success": true, "data": <payload> }            // most endpoints
 { "success": true, "message": "..." }             // action endpoints (delete/reset)
 ```
-List endpoints put the array inside `data`; mutation endpoints put the created/updated object inside `data`.
+Most list endpoints put the array inside `data`; mutation endpoints put the created/updated object inside `data`. Notes pagination is the exception: `GET /api/notes` returns `data: { notes, nextCursor }`.
 
 ### Conventions the frontend should rely on
 
@@ -108,7 +109,9 @@ List endpoints put the array inside `data`; mutation endpoints put the created/u
 - **Enums (string literals)** — always compare case-sensitively: `role` ∈ `{"USER","ADMIN"}`, attendance `field` ∈ `{"CHECK_IN","CHECK_OUT"}`.
 - **Numbers** — weather: temperature `°C`, wind `km/h`, humidity `%`. Attendance: `workedMinutes`/`durationMins`/`stopsBetween` are integers in **minutes**.
 - **Validation errors** come back as `400` with a human-readable `error` string safe to surface to users — use it to populate form-field errors.
-- **Empty states** — `GET /api/attendance/me` returns `"attendance": null` when no record exists for the day; list endpoints return `"data": []` when empty.
+- **Empty states** — `GET /api/attendance/me` returns `"attendance": null` when no record exists for the day; non-paginated list endpoints return `"data": []` when empty.
+- **Notes concurrency** - single-note responses expose a strong `ETag`; versioned Notes mutations must echo it exactly in `If-Match`. Browser CORS allows `If-Match` and exposes `ETag`.
+- **Notes empty pages** - `GET /api/notes` returns `{"success":true,"data":{"notes":[],"nextCursor":null}}` when the selected view is empty.
 
 ### Suggested auth flow on the client
 
@@ -147,6 +150,8 @@ const API = {
 };
 // Usage: const user = await API.request<User>('/users/me');
 ```
+
+Do not use this JSON wrapper for a Notes signed upload URL. Upload the raw image bytes directly to the returned `uploadUrl` with the returned `method` and `headers`; then call the backend confirmation endpoint as documented below.
 
 ---
 
@@ -570,6 +575,584 @@ All favlink endpoints require authentication via `Authorization: Bearer <accessT
   "message": "FavLink deleted successfully"
 }
 ```
+
+---
+
+## Notes
+
+Prefix: `/api/notes`
+
+Notes are private, user-owned plain-text records with optimistic concurrency, lifecycle views, and up to 10 ordered private images. All 13 user endpoints require `Authorization: Bearer <accessToken>`. The cleanup endpoint is internal and uses a separate cron secret, not a user JWT.
+
+### Route summary
+
+| Method | Path | Auth | `If-Match` | Success | Description |
+|--------|------|------|------------|---------|-------------|
+| POST | `/api/notes` | Bearer | No | `201` | Create a note |
+| GET | `/api/notes` | Bearer | No | `200` | List one cursor page from a view |
+| GET | `/api/notes/:noteId` | Bearer | No | `200` | Get one visible note |
+| PATCH | `/api/notes/:noteId` | Bearer | Yes | `200` | Edit text, color, or pin state |
+| POST | `/api/notes/:noteId/archive` | Bearer | Yes | `200` | Archive an active note |
+| POST | `/api/notes/:noteId/unarchive` | Bearer | Yes | `200` | Return an archived note to active |
+| POST | `/api/notes/:noteId/trash` | Bearer | Yes | `200` | Move an untrashed note to trash |
+| POST | `/api/notes/:noteId/restore` | Bearer | Yes | `200` | Restore a trashed note to its prior state |
+| DELETE | `/api/notes/:noteId` | Bearer | Yes | `202` | Claim a trashed note for permanent purge |
+| POST | `/api/notes/:noteId/images/upload-intents` | Bearer | No | `201` | Reserve an image and obtain a signed upload |
+| POST | `/api/notes/:noteId/images/:imageId/confirm` | Bearer | Yes | `200` | Verify and attach an uploaded image |
+| PUT | `/api/notes/:noteId/images/order` | Bearer | Yes | `200` | Replace the complete ready-image order |
+| DELETE | `/api/notes/:noteId/images/:imageId` | Bearer | Yes | `200` | Hide and schedule deletion of a ready image |
+| GET | `/api/internal/notes/cleanup` | Cron secret | No | `200` | Run bounded retention and storage cleanup |
+
+### Shared Notes contracts
+
+#### IDs, ownership, and visibility
+
+- `:noteId`, `:imageId`, and image IDs in an order request must match the exact CUID syntax `^c[a-z0-9]{24}$`; malformed IDs return `400` before a resource lookup.
+- Every user resource lookup is scoped to the authenticated `userId`. A missing and a foreign note both return `404` with `"Note not found"`; a missing and a foreign image both return `404` with `"Note image not found"`.
+- A note is hidden as soon as permanent purge is claimed. It then behaves as not found and cannot be read, restored, or mutated.
+- Public DTOs never expose `userId`, storage paths, provider tokens/errors, image status, upload-expiry fields, or the internal purge claim.
+
+#### `NoteDTO` and `NoteImageDTO`
+
+Every endpoint described as returning a note uses this exact envelope and sets a strong ETag equal to the note version:
+
+```http
+ETag: "7"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "c111111111111111111111111",
+    "title": "Release checklist",
+    "content": "Run the smoke test before rollout.",
+    "color": "BLUE",
+    "isPinned": true,
+    "archivedAt": null,
+    "trashedAt": null,
+    "version": 7,
+    "createdAt": "2026-08-20T01:02:03.000Z",
+    "updatedAt": "2026-08-22T04:05:06.000Z",
+    "images": [
+      {
+        "id": "c222222222222222222222222",
+        "mimeType": "image/png",
+        "sizeBytes": 123456,
+        "position": 0,
+        "url": "<temporary signed read URL>",
+        "urlExpiresAt": "2026-08-22T04:20:06.000Z"
+      }
+    ]
+  }
+}
+```
+
+```ts
+type NoteDTO = {
+  id: string;
+  title: string;
+  content: string;
+  color: NoteColor;
+  isPinned: boolean;
+  archivedAt: string | null;
+  trashedAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  images: NoteImageDTO[];
+};
+
+type NoteImageDTO = {
+  id: string;
+  mimeType: string;
+  sizeBytes: number;
+  position: number;
+  url: string;
+  urlExpiresAt: string;
+};
+```
+
+Only `READY` images appear in `images`. They are ordered by `position` ascending, then `id` ascending; normal mutations keep positions contiguous and zero-based.
+
+#### Signed image reads
+
+- Each returned `url` is a temporary read URL for the private bucket. It is not a stable asset URL and must not be persisted as one.
+- `urlExpiresAt` is the client refresh deadline computed for that response. The default lifetime is 15 minutes and is configured by `NOTE_IMAGE_READ_URL_TTL`.
+- All ready images mapped in one response share one `urlExpiresAt`. A list page signs all image paths needed by that page in one provider call.
+- If any required URL cannot be signed or reassociated, the entire API request returns `503`; the API never returns a partial image list.
+- A zero-image response performs no storage call, so ordinary note records without images do not require Supabase at read time.
+- Refetch the note or page to obtain fresh URLs after expiry.
+
+### Strong ETag and strict `If-Match`
+
+Single-note responses from create, get, patch, lifecycle actions, image confirmation, image reorder, and image deletion include an exact strong ETag:
+
+```http
+ETag: "7"
+```
+
+Every versioned mutation must send that value unchanged:
+
+```http
+If-Match: "7"
+```
+
+The accepted syntax is exactly `^"([1-9]\d*)"$`, and the parsed version must be a JavaScript safe integer. Weak tags, `*`, unquoted numbers, zero, signs, leading zeroes, whitespace, and tag lists are rejected.
+
+| Condition | Status | Error |
+|-----------|--------|-------|
+| Header omitted | `428` | `If-Match header is required` |
+| Header syntax invalid | `400` | `Invalid If-Match header` |
+| Valid tag but current version differs | `412` | `Note version does not match If-Match` |
+
+Each successful visible mutation increments `version` exactly once and returns the new ETag. Creating an upload intent and internal image cleanup do not increment it. A list response, upload-intent response, and `202` purge response do not include a note ETag. Browser CORS permits `If-Match` and exposes `ETag` to JavaScript.
+
+### Fixed values and validation
+
+Request bodies for create, patch, upload intent, and image order are strict JSON objects: unknown fields are rejected. Title/content whitespace is preserved and empty strings are valid; values are not trimmed.
+
+Colors are case-sensitive and fixed:
+
+```text
+DEFAULT, RED, ORANGE, YELLOW, GREEN, TEAL, BLUE, PURPLE, PINK, BROWN, GRAY
+```
+
+| Value | Implemented rule |
+|-------|------------------|
+| Title length | `0..200` |
+| Content length | `0..20,000` |
+| Views | `active`, `archived`, `trash` |
+| Page limit | `1..50`; default `30` |
+| Encoded cursor length | `1..2,048` characters |
+| Images per note | At most `10` combined `PENDING` plus `READY` images |
+| Declared image size | Safe positive integer, at most `10,485,760` bytes (10 MiB) |
+| Provisional upload reservation lifetime | 2 hours; replaced by the provider token's actual expiry before the intent is returned |
+| Upload-token replay grace | 5 minutes after the provider upload token expires |
+| Trash retention default | 7 days, configurable with `NOTE_TRASH_RETENTION` |
+| Note cleanup claim batch | 25 |
+| Image cleanup claim batch | 50 |
+| Storage removal batch | 100 unique paths |
+| Cleanup failure retry | 25 hours |
+
+Image MIME values and generated extensions are fixed and case-sensitive:
+
+| `mimeType` | Internal extension | Maximum bytes |
+|------------|--------------------|---------------|
+| `image/jpeg` | `jpg` | `10,485,760` |
+| `image/png` | `png` | `10,485,760` |
+| `image/webp` | `webp` | `10,485,760` |
+
+An unsupported string MIME returns `415`; a missing or non-string MIME returns `400`. An integer over the byte limit returns `413`; missing, zero, negative, fractional, nonnumeric, or non-finite sizes return `400`.
+
+### Views, ordering, and cursor pagination
+
+#### GET `/api/notes`
+
+**Query parameters**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `view` | enum | No | `active`, `archived`, or `trash`; default `active` |
+| `limit` | integer | No | `1..50`; default `30`. A query string must be unsigned decimal without a leading zero. |
+| `cursor` | string | No | Opaque canonical cursor returned by the previous page for the same view |
+
+Unknown query fields, repeated/non-string values, invalid bounds, malformed cursors, and cursors from another view return `400`.
+
+| View | Membership | Deterministic order |
+|------|------------|---------------------|
+| `active` | `trashedAt == null` and `archivedAt == null` | `isPinned DESC`, `updatedAt DESC`, `id DESC` |
+| `archived` | `trashedAt == null` and `archivedAt != null` | `updatedAt DESC`, `id DESC` |
+| `trash` | `trashedAt != null` | `trashedAt DESC`, `id DESC` |
+
+Purge-claimed notes are excluded from every view. Trash membership takes precedence over the prior archive/pin fields retained on a trashed note.
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "notes": [],
+    "nextCursor": null
+  }
+}
+```
+
+`data.notes` is a `NoteDTO[]`, not a top-level array. The server fetches `limit + 1`, returns at most `limit`, and sets `nextCursor` to `null` when no further row exists.
+
+The cursor is canonical, unpadded base64url-encoded UTF-8 JSON containing the complete descending sort tuple:
+
+```ts
+{ view: "active", isPinned: boolean, updatedAt: string, id: string }
+{ view: "archived", updatedAt: string, id: string }
+{ view: "trash", trashedAt: string, id: string }
+```
+
+The JSON object is strict, the timestamp must be a real ISO date-time with `Z` or a numeric offset, and `id` must be a valid CUID. The decoded bytes must re-encode to exactly the supplied base64url string, so padding and alternative non-canonical encodings fail. Do not decode, construct, edit, pad, or reuse a cursor with another view; pass `nextCursor` back unchanged with the same `view`. Under a static data set, the `id` tie-breaker prevents equal timestamps from being skipped or duplicated, and active pagination transitions from pinned to unpinned rows without returning to pinned rows.
+
+### POST `/api/notes`
+
+The create JSON object may be `{}`. All fields are optional:
+
+```json
+{
+  "title": "Release checklist",
+  "content": "Run the smoke test before rollout.",
+  "color": "BLUE"
+}
+```
+
+Defaults are `title: ""`, `content: ""`, `color: "DEFAULT"`, `isPinned: false`, `archivedAt: null`, `trashedAt: null`, `version: 1`, and `images: []`.
+
+**Response `201`** - `{ "success": true, "data": <NoteDTO> }` with `ETag: "1"`.
+
+### GET `/api/notes/:noteId`
+
+Returns an active, archived, or trashed note as long as it belongs to the caller and purge has not been claimed. No request body or query parameters are used.
+
+**Response `200`** - `{ "success": true, "data": <NoteDTO> }` with `ETag: "<version>"`.
+
+### PATCH `/api/notes/:noteId`
+
+**Request body** - at least one field is required:
+
+```json
+{
+  "title": "Updated title",
+  "content": "Updated plain text",
+  "color": "TEAL",
+  "isPinned": false
+}
+```
+
+Send `If-Match: "<current version>"`. Active and archived notes may change title, content, and color. Trashed notes cannot be patched. `isPinned: true` is valid only for an active note; an archived note may receive `isPinned: false` but cannot be pinned.
+
+**Response `200`** - `{ "success": true, "data": <updated NoteDTO> }` with the incremented ETag.
+
+### POST `/api/notes/:noteId/archive`
+
+No request body. Requires the current `If-Match` and an active, untrashed note. The operation sets `archivedAt`, always clears `isPinned`, and increments the version. Re-archiving or archiving trash returns `409`.
+
+**Response `200`** - `{ "success": true, "data": <updated NoteDTO> }` with the incremented ETag.
+
+### POST `/api/notes/:noteId/unarchive`
+
+No request body. Requires the current `If-Match` and an archived, untrashed note. The operation clears `archivedAt` and increments the version. Unarchiving an active or trashed note returns `409`.
+
+**Response `200`** - `{ "success": true, "data": <updated NoteDTO> }` with the incremented ETag.
+
+### POST `/api/notes/:noteId/trash`
+
+No request body. Requires the current `If-Match` and any untrashed note. The operation sets `trashedAt` and increments the version; it deliberately preserves `archivedAt` and `isPinned`. Trashing an already trashed note returns `409`.
+
+**Response `200`** - `{ "success": true, "data": <updated NoteDTO> }` with the incremented ETag.
+
+### POST `/api/notes/:noteId/restore`
+
+No request body. Requires the current `If-Match` and an unclaimed trashed note. The operation clears only `trashedAt` and increments the version:
+
+- A note trashed from archive returns to the archived view.
+- A note trashed while active returns to the active view.
+- A pinned active note retains its pin through trash and restore.
+
+Restoring an untrashed note returns `409`; restoring after cleanup has claimed purge returns the ownership-safe `404`.
+
+**Response `200`** - `{ "success": true, "data": <updated NoteDTO> }` with the incremented ETag.
+
+### DELETE `/api/notes/:noteId`
+
+Permanent delete is accepted only for a trashed note and requires the current `If-Match`. It atomically claims purge, increments the internal version, and hides the note immediately. It then advances the same bounded, idempotent purge routine used by cron.
+
+The response does not promise that Supabase objects and database rows were synchronously removed. Storage failure or a still-replayable upload URL leaves durable cleanup work, but does not change the accepted response.
+
+**Response `202`**
+
+```json
+{
+  "success": true,
+  "message": "Note deletion accepted"
+}
+```
+
+Deleting an active/archived note returns `409`. A second delete after the first claim returns `404` because claimed notes are hidden.
+
+### Image lifecycle and direct upload
+
+Image intent creation, confirmation, reorder, and deletion are allowed for active and archived notes but never for trashed notes. A pending reservation is invisible in `NoteDTO.images`. Only confirmation makes it visible and increments the note version.
+
+#### POST `/api/notes/:noteId/images/upload-intents`
+
+This endpoint does not require `If-Match` and does not increment the note version.
+
+**Request body**
+
+```json
+{
+  "mimeType": "image/png",
+  "sizeBytes": 123456
+}
+```
+
+The service serializes reservations against the parent note, counts both pending and ready images, and rejects a combined count of 10 with `409`. It creates a unique provider path from server-owned IDs; client filenames and paths are not accepted.
+
+**Response `201`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "imageId": "c222222222222222222222222",
+    "uploadUrl": "<temporary signed upload URL>",
+    "uploadExpiresAt": "2026-08-22T06:05:06.000Z",
+    "method": "PUT",
+    "headers": {
+      "Content-Type": "image/png"
+    }
+  }
+}
+```
+
+`uploadExpiresAt` comes from the actual signed provider token and is persisted before the URL is returned; it is not a local two-hour estimate. If provider signing or expiry validation fails, the API attempts to compensate the invisible reservation and returns a generic `503`.
+
+#### Direct PUT sequence
+
+1. Create the upload intent with backend bearer authentication and JSON `Content-Type`.
+2. Before `uploadExpiresAt`, send the raw image bytes directly to `data.uploadUrl` using exactly `data.method` (`PUT`) and the returned `data.headers`, including the exact declared `Content-Type`.
+3. Do not send the API JSON envelope, the Northstar API base URL, a backend bearer token, or any Supabase service credential to the signed upload URL.
+4. Call the confirmation endpoint with backend bearer authentication and the note's current strong ETag in `If-Match`.
+5. Use the confirmed `NoteDTO` and its new ETag for subsequent mutations.
+
+The signed upload is non-upsert and each reservation has a unique server-selected path. There is no backend endpoint that accepts the image bytes themselves.
+
+#### POST `/api/notes/:noteId/images/:imageId/confirm`
+
+No request body. Send the note's current `If-Match`. The reservation must still be `PENDING`, the note must be untrashed/unclaimed, and confirmation must complete before the stored provider expiry. Expiry is rechecked against the PostgreSQL wall clock after acquiring the parent lock.
+
+Before promotion, the backend reads provider object metadata and requires all of the following:
+
+- The object exists.
+- Top-level provider `size` is a safe positive integer no greater than 10 MiB.
+- Provider size exactly equals the `sizeBytes` declared in the intent.
+- Top-level provider `contentType` is one of the three allowed MIME values.
+- Provider content type exactly equals the `mimeType` declared in the intent.
+
+Confirmation verifies metadata; it does not expose provider metadata or paths in the response. A missing object, invalid metadata, size mismatch, or MIME mismatch tombstones the reservation, attempts object removal, and returns `422` with `"Uploaded image metadata is invalid"` without incrementing the note version. An unavailable provider returns `503`. An expired/unavailable intent returns `409`.
+
+On success, current ready-image positions are normalized, the image is appended at the next zero-based position, and the note version increments once.
+
+**Response `200`** - `{ "success": true, "data": <updated NoteDTO> }` with the incremented ETag.
+
+If another visible mutation changes the version during provider I/O, confirmation returns `412` and leaves the candidate pending so it can be retried with a fresh note ETag before expiry.
+
+#### PUT `/api/notes/:noteId/images/order`
+
+Send the current `If-Match` and the complete desired permutation of every currently ready image ID:
+
+```json
+{
+  "imageIds": [
+    "c333333333333333333333333",
+    "c222222222222222222222222"
+  ]
+}
+```
+
+The array is strict, contains at most 10 unique valid CUIDs, and may be empty only when the note has no ready images. Every supplied image must belong to this note and be `READY`, and the array length must equal the current ready-image count. The service revalidates the complete set while the parent is locked, writes each array index as `position`, and increments the note version once.
+
+| Condition | Status |
+|-----------|--------|
+| Duplicate/malformed IDs or more than 10 entries | `400` |
+| Missing or foreign supplied image | `404` |
+| Pending/delete-pending image | `409` |
+| Incomplete ready-image permutation | `409` |
+
+**Response `200`** - `{ "success": true, "data": <updated NoteDTO> }` with the incremented ETag.
+
+#### DELETE `/api/notes/:noteId/images/:imageId`
+
+No request body. Send the current `If-Match`. The target must be a ready image owned through this untrashed note. The transaction immediately changes it to an internal delete-pending tombstone, removes it from the public DTO, compacts remaining positions, and increments the note version. Provider removal happens after commit and its failure does not reverse the visible mutation.
+
+**Response `200`** - `{ "success": true, "data": <updated NoteDTO without the image> }` with the incremented ETag.
+
+### Lifecycle and purge rules
+
+| Current state | Read by ID | Patch | Image operations | Valid transition |
+|---------------|------------|-------|------------------|------------------|
+| Active | Yes | Yes | Yes | Archive or trash |
+| Archived | Yes | Yes, except pinning true | Yes | Unarchive or trash |
+| Trash, unclaimed | Yes | No | No | Restore or permanent delete |
+| Purge claimed | Ownership-safe `404` | No | No | Cleanup only |
+
+- Archiving clears pin state, and the database invariant disallows a pinned archived note.
+- Trash preserves archive and pin fields. Restore therefore returns the note to the exact active/archived and pinned/unpinned state it had before trash.
+- Automatic purge eligibility is based on `trashedAt <= now - NOTE_TRASH_RETENTION`; the default retention is seven days.
+- Cleanup claims purge atomically and increments the version before hiding a note, so restore cannot win after a claim.
+- The note-to-user foreign key uses delete restriction. User deletion cannot cascade away note rows while external object cleanup may still depend on them.
+
+### Replay-safe tombstones
+
+A signed non-upsert upload URL can remain replayable after its current object is removed. Deleting the database row immediately would allow that URL to recreate an object with no discoverable cleanup path.
+
+For image deletion, invalid confirmation, and abandoned uploads, the implementation keeps a `DELETE_PENDING` row containing the internal path until:
+
+```text
+safeDeleteAt = uploadTokenExpiresAt + 5 minutes
+```
+
+The backend may attempt removal immediately, but it retains the tombstone and performs a final idempotent removal after `safeDeleteAt` before conditionally deleting the row. A provider `404` is treated as success. For full-note purge, the parent and all child path rows remain until the latest child safe horizon; cleanup performs the final object sweep before deleting image rows and then the note. Provider/database failures are rescheduled 25 hours later.
+
+### GET `/api/internal/notes/cleanup`
+
+This is the only internal Notes endpoint. It does not accept a user JWT as authorization; the request must contain exactly one authorization header in this form:
+
+```http
+Authorization: Bearer <CRON_SECRET>
+```
+
+Missing, malformed, duplicate, or nonmatching authorization returns `401` with `{"success":false,"error":"Unauthorized"}`. The supplied and configured values are SHA-256 hashed and their equal-length digests are compared with `timingSafeEqual`.
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "claimedNotes": 0,
+    "purgedNotes": 0,
+    "deferredNotePurges": 0,
+    "failedNotePurges": 0,
+    "claimedUploads": 0,
+    "deletedImages": 0,
+    "deferredImageDeletes": 0,
+    "failedImageDeletes": 0
+  }
+}
+```
+
+These are counts for this invocation, not totals or backlog sizes:
+
+| Field | Meaning |
+|-------|---------|
+| `claimedNotes` | Retention-expired trash notes newly hidden and marked for purge |
+| `purgedNotes` | Due claimed notes fully removed, including an already-absent claimed note treated idempotently |
+| `deferredNotePurges` | Claimed notes retaining child paths for another bounded batch or replay-safe horizon |
+| `failedNotePurges` | Claimed notes rescheduled after provider/database failure |
+| `claimedUploads` | Expired pending upload reservations changed to delete-pending |
+| `deletedImages` | Standalone image tombstone rows removed after final object deletion |
+| `deferredImageDeletes` | Image tombstones retained until their safe replay horizon |
+| `failedImageDeletes` | Image tombstones rescheduled after provider/database failure |
+
+One invocation uses ordered `FOR UPDATE SKIP LOCKED` claims and is bounded as follows:
+
+- At most 25 retention-expired notes are newly claimed.
+- At most 25 due claimed-note purges are advanced.
+- Each claimed note advances at most 100 child object paths.
+- At most 50 expired pending uploads are claimed.
+- At most 50 due standalone image tombstones are finalized.
+- Provider removals are deduplicated and chunked at 100 paths.
+
+Expired uploads receive an immediate removal attempt when claimed but retain their tombstone through the token replay window, then receive a final sweep. Missing provider objects and concurrently missing database rows are idempotent success. Work selected for a failed attempt is scheduled 25 hours forward so a permanent failure cannot monopolize the daily batches.
+
+Vercel is configured to call this route daily with:
+
+```text
+0 3 * * *
+```
+
+The scheduler must send the exact `Authorization: Bearer <CRON_SECRET>` header. Never put the cron secret in a frontend, request URL, repository file, response, or log.
+
+### Notes status table
+
+All failures use the global error envelope `{"success":false,"error":"..."}`.
+
+| Status | Notes meaning |
+|--------|---------------|
+| `200` | Read, versioned mutation, or cleanup succeeded |
+| `201` | Note or upload intent created |
+| `202` | Permanent purge durably accepted; physical cleanup may continue |
+| `400` | Invalid strict body/query, CUID, cursor, image order, or `If-Match` syntax |
+| `401` | Missing/invalid/expired user access token, or invalid cleanup secret |
+| `403` | Browser origin rejected by CORS |
+| `404` | Missing/foreign note or image, or note already purge-claimed |
+| `409` | Invalid note/image lifecycle, image limit/order conflict, expired intent, or concurrent state race |
+| `412` | Current note version does not match `If-Match` |
+| `413` | Declared image size exceeds 10 MiB |
+| `415` | MIME string is not one of the three supported image MIME values |
+| `422` | Uploaded provider object is absent or its metadata does not exactly match the intent |
+| `428` | A versioned mutation omitted `If-Match` |
+| `500` | Unexpected database/configuration/runtime failure; response remains generic |
+| `503` | Storage upload signing, metadata lookup, or required read-URL generation is unavailable |
+
+Common stable errors include:
+
+```json
+{ "success": false, "error": "Note not found" }
+{ "success": false, "error": "Note image not found" }
+{ "success": false, "error": "Note state does not allow this operation" }
+{ "success": false, "error": "Note image state does not allow this operation" }
+{ "success": false, "error": "Storage service unavailable" }
+```
+
+Provider response bodies, credentials, signed tokens, and internal paths are reduced to safe API errors and are never included in a Notes response.
+
+### Lazy environment variables
+
+All Notes-specific settings are getters and are validated only when the corresponding Notes operation needs them. Server startup, unrelated modules, and zero-image note operations do not initialize Supabase. `CRON_SECRET` is read only while authenticating the internal cleanup request.
+
+| Variable | Default | Validation and use |
+|----------|---------|--------------------|
+| `SUPABASE_URL` | None | Required for image storage/setup; nonblank valid HTTP(S) URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | None | Required for backend storage/setup; nonblank backend-only secret/service-role credential |
+| `SUPABASE_NOTE_IMAGES_BUCKET` | None | Required for image storage/setup; matches `[a-z0-9][a-z0-9._-]{0,99}` |
+| `NOTE_IMAGE_READ_URL_TTL` | `15m` | Signed read lifetime |
+| `NOTE_TRASH_RETENTION` | `7d` | Automatic trash claim age |
+| `CRON_SECRET` | None | Required only for cleanup authentication; nonblank |
+
+Notes duration values require a positive integer followed by the explicit lowercase unit `ms`, `s`, `m`, `h`, or `d`. Keep the Supabase credential and cron secret in backend-only deployment secret storage. Browser clients receive only temporary signed URLs and never need the Supabase secret/service-role credential.
+
+### Private bucket setup
+
+After targeting the intended Supabase project and configuring the backend-only environment, run the idempotent setup command:
+
+```bash
+npm run setup:note-storage
+```
+
+The command creates the configured bucket or updates it after an existing-bucket conflict with exactly:
+
+```ts
+{
+  public: false,
+  fileSizeLimit: 10 * 1024 * 1024,
+  allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+}
+```
+
+Keep this as a separate private bucket and do not add public read policies. Re-running the command is safe; it does not make the bucket public.
+
+### Deployment and rollback cautions
+
+Deployment order:
+
+1. Use the repository's supported Node version (`>=22.12.0`).
+2. Verify the exact intended Neon database and Supabase project before running setup, migration, or storage smoke commands.
+3. Provision/configure the separate private bucket and backend-only Notes environment variables.
+4. Run `npm run setup:note-storage` against the intended Supabase project.
+5. Apply the additive Notes migration with `npm run prisma:deploy`, then run `npm run prisma:generate`.
+6. Deploy the Notes routes and the Vercel daily cron together.
+7. In non-production, smoke test create -> intent -> direct PUT -> confirm -> signed read -> trash/restore -> purge/cleanup before enabling clients.
+
+The migration creates new PostgreSQL enums/tables, named check constraints, indexes, and restrictive/cascading foreign keys. Do not run a migration or destructive storage smoke test against an unidentified target.
+
+Rollback must preserve the database path inventory needed to remove private storage objects:
+
+1. Disable the 13 Notes user routes first.
+2. Keep cleanup running while outstanding tombstones/purge claims still have recoverable paths; disable cron only when those paths remain safely recoverable by another process.
+3. Preserve `Note` and `NoteImage` rows until all corresponding storage objects are enumerated and removed.
+4. Drop Notes schema objects or the private bucket only after external cleanup is complete.
+
+Do not roll back by dropping the tables first. That loses the only durable object-path inventory and can leave private storage objects orphaned.
 
 ---
 
@@ -1336,10 +1919,16 @@ All errors follow a consistent shape:
 |-------------|--------------------------------|
 | 400         | Validation error               |
 | 401         | Missing/invalid/expired token  |
-| 403         | Account deactivated            |
-| 404         | Resource not found (via Prisma)|
-| 409         | Duplicate resource (e.g., email)|
+| 403         | Forbidden, deactivated account, or rejected browser origin |
+| 404         | Resource not found             |
+| 409         | Duplicate resource or invalid Notes state |
+| 412         | Notes `If-Match` version conflict |
+| 413         | Notes image exceeds 10 MiB     |
+| 415         | Unsupported Notes image MIME   |
+| 422         | Uploaded Notes image metadata invalid |
+| 428         | Required Notes `If-Match` missing |
 | 500         | Internal server error          |
+| 503         | Notes storage unavailable      |
 
 ---
 
@@ -1382,8 +1971,22 @@ All errors follow a consistent shape:
 |33 | GET    | `/api/attendance/me/month`| Yes  | My attendance for a month + summary |
 |34 | PATCH  | `/api/attendance/:id`    | Yes  | Correct check-in/out time     |
 |35 | GET    | `/api/attendance/:id/history`| Yes| Attendance correction history |
+|36 | POST   | `/api/notes`             | Yes  | Create note                  |
+|37 | GET    | `/api/notes`             | Yes  | List a Notes view page       |
+|38 | GET    | `/api/notes/:noteId`     | Yes  | Get note by ID               |
+|39 | PATCH  | `/api/notes/:noteId`     | Yes  | Edit note                    |
+|40 | POST   | `/api/notes/:noteId/archive` | Yes | Archive note              |
+|41 | POST   | `/api/notes/:noteId/unarchive` | Yes | Unarchive note          |
+|42 | POST   | `/api/notes/:noteId/trash` | Yes | Move note to trash         |
+|43 | POST   | `/api/notes/:noteId/restore` | Yes | Restore trashed note      |
+|44 | DELETE | `/api/notes/:noteId`     | Yes  | Accept permanent purge       |
+|45 | POST   | `/api/notes/:noteId/images/upload-intents` | Yes | Create image upload intent |
+|46 | POST   | `/api/notes/:noteId/images/:imageId/confirm` | Yes | Confirm uploaded image |
+|47 | PUT    | `/api/notes/:noteId/images/order` | Yes | Replace ready-image order |
+|48 | DELETE | `/api/notes/:noteId/images/:imageId` | Yes | Delete ready image     |
+|49 | GET    | `/api/internal/notes/cleanup` | Cron secret | Run bounded Notes cleanup |
 
-**Total: 35 endpoints** (7 auth, 2 users, 5 folders, 5 favlinks, 8 attendance, and 8 root/public utility endpoints)
+**Total: 49 endpoints** (7 auth, 2 users, 5 folders, 5 favlinks, 8 attendance, 13 authenticated Notes user endpoints, 1 internal Notes cleanup endpoint, and 8 root/public utility endpoints)
 
 ---
 
@@ -1440,6 +2043,100 @@ export interface FavLink {
   folderId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Notes ───────────────────────────────────────────────────────────
+export type NoteColor =
+  | "DEFAULT"
+  | "RED"
+  | "ORANGE"
+  | "YELLOW"
+  | "GREEN"
+  | "TEAL"
+  | "BLUE"
+  | "PURPLE"
+  | "PINK"
+  | "BROWN"
+  | "GRAY";
+
+export type NoteView = "active" | "archived" | "trash";
+export type NoteImageMimeType = "image/jpeg" | "image/png" | "image/webp";
+
+export interface NoteImage {
+  id: string;
+  mimeType: string;            // constrained to NoteImageMimeType by API/DB invariants
+  sizeBytes: number;
+  position: number;            // zero-based ready-image order
+  url: string;                 // temporary signed private read URL
+  urlExpiresAt: string;        // UTC ISO; refetch after this instant
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  color: NoteColor;
+  isPinned: boolean;
+  archivedAt: string | null;
+  trashedAt: string | null;
+  version: number;             // response ETag is the quoted decimal value
+  createdAt: string;
+  updatedAt: string;
+  images: NoteImage[];         // READY only, ordered by position
+}
+
+export interface NoteListPage {
+  notes: Note[];
+  nextCursor: string | null;   // opaque canonical cursor; reuse only with same view
+}
+
+export interface NoteListQuery {
+  view?: NoteView;             // default "active"
+  limit?: number;              // integer 1..50, default 30
+  cursor?: string;             // exact nextCursor from the same view
+}
+
+export interface CreateNoteInput {
+  title?: string;              // max 200; empty/whitespace preserved
+  content?: string;            // max 20,000; empty/whitespace preserved
+  color?: NoteColor;
+}
+
+export interface PatchNoteInput {
+  title?: string;
+  content?: string;
+  color?: NoteColor;
+  isPinned?: boolean;
+}
+
+export interface NoteImageUploadIntentInput {
+  mimeType: NoteImageMimeType;
+  sizeBytes: number;           // integer 1..10,485,760
+}
+
+export interface NoteImageUploadIntent {
+  imageId: string;
+  uploadUrl: string;
+  uploadExpiresAt: string;
+  method: "PUT";
+  headers: {
+    "Content-Type": NoteImageMimeType;
+  };
+}
+
+export interface NoteImageOrderInput {
+  imageIds: string[];          // complete permutation of all READY image IDs
+}
+
+export interface NoteCleanupResult {
+  claimedNotes: number;
+  purgedNotes: number;
+  deferredNotePurges: number;
+  failedNotePurges: number;
+  claimedUploads: number;
+  deletedImages: number;
+  deferredImageDeletes: number;
+  failedImageDeletes: number;
 }
 
 // ── Weather ─────────────────────────────────────────────────────────

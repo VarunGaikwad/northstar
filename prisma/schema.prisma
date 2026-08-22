@@ -28,6 +28,7 @@ model User {
   favlinks     FavLink[]
   attendance   Attendance[]  @relation("UserAttendance")
   authSessions AuthSession[]
+  notes        Note[]
 
   @@index([isActive])
   @@index([resetToken])
@@ -88,6 +89,74 @@ model FavLink {
 enum Role {
   USER
   ADMIN
+}
+
+// ───────────────────────────────────────────────────────────────
+// Private notes
+// ───────────────────────────────────────────────────────────────
+model Note {
+  id               String    @id @default(cuid())
+  userId           String
+  title            String    @default("") @db.VarChar(200)
+  content          String    @default("")
+  color            NoteColor @default(DEFAULT)
+  isPinned         Boolean   @default(false)
+  archivedAt       DateTime?
+  trashedAt        DateTime?
+  purgeRequestedAt DateTime?
+  version          Int       @default(1)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  images NoteImage[]
+
+  @@index([userId, trashedAt, archivedAt, isPinned, updatedAt, id])
+  @@index([userId, trashedAt, id])
+  @@index([trashedAt, purgeRequestedAt])
+  @@index([purgeRequestedAt])
+  @@index([purgeRequestedAt, updatedAt])
+}
+
+model NoteImage {
+  id                   String          @id @default(cuid())
+  noteId               String
+  storagePath          String          @unique
+  mimeType             String
+  sizeBytes            Int
+  position             Int?
+  status               NoteImageStatus @default(PENDING)
+  uploadExpiresAt      DateTime?
+  uploadTokenExpiresAt DateTime
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId, status, position])
+  @@index([status, uploadExpiresAt])
+  @@index([status, uploadTokenExpiresAt])
+  @@index([status, updatedAt, uploadTokenExpiresAt])
+}
+
+enum NoteColor {
+  DEFAULT
+  RED
+  ORANGE
+  YELLOW
+  GREEN
+  TEAL
+  BLUE
+  PURPLE
+  PINK
+  BROWN
+  GRAY
+}
+
+enum NoteImageStatus {
+  PENDING
+  READY
+  DELETE_PENDING
 }
 
 // ───────────────────────────────────────────────────────────────

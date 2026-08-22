@@ -12,6 +12,8 @@ import backgroundRoutes from "./modules/background/background.routes";
 import favlinkRoutes from "./modules/favlinks/favlinks.routes";
 import folderRoutes from "./modules/folders/folders.routes";
 import lrtRoutes from "./modules/lrt/lrt.routes";
+import notesInternalRoutes from "./modules/notes/notes.internal.routes";
+import noteRoutes from "./modules/notes/notes.routes";
 import quoteRoutes from "./modules/quotes/quotes.routes";
 import userRoutes from "./modules/users/users.routes";
 import weatherRoutes from "./modules/weather/weather.routes";
@@ -27,7 +29,8 @@ app.use(
       return callback(new ApiError("Origin is not allowed", 403));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "If-Match"],
+    exposedHeaders: ["ETag"],
     credentials: true,
   })
 );
@@ -52,6 +55,8 @@ app.use("/api/lrt", lrtRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/background", backgroundRoutes);
 app.use("/api/quote", quoteRoutes);
+app.use("/api/notes", noteRoutes);
+app.use("/api/internal/notes", notesInternalRoutes);
 
 app.use(errorHandler);
 

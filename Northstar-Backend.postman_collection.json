@@ -868,6 +868,466 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Notes",
+      "description": "All 13 authenticated Notes API requests. The :noteId and :imageId values are request-local, validator-valid examples and must be replaced with IDs owned by the authenticated user. Versioned mutations require the latest strict quoted ETag in If-Match, for example \"1\"; an unquoted value is invalid.\n\nImage upload sequence:\n1. Create a note or choose an untrashed note and set that ID in the upload-intent request's local noteId variable.\n2. Send Create Image Upload Intent with the exact MIME type and byte size of the local file.\n3. Before uploadExpiresAt, use the response's method, exact uploadUrl, and exact Content-Type header to upload those file bytes directly. Treat uploadUrl as a short-lived credential: do not save it in this collection, logs, source control, or a variable.\n4. Set the returned imageId and the same note ID in Confirm Note Image, then send it with the note's latest quoted ETag.\n5. Use the newly returned ETag for later versioned mutations. Signed URLs, upload tokens, and storage object paths are intentionally not included in this collection.",
+      "item": [
+        {
+          "name": "Create Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Postman note\",\n  \"content\": \"Created through the Notes API.\",\n  \"color\": \"BLUE\"\n}"
+            },
+            "description": "Creates a note from the strict JSON body. All shown fields are optional individually. Expected success: 201 Created with the new note ETag.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "description": "Lists active notes with a valid limit from 1 through 50. Change view to archived or trash as needed; enable cursor only with nextCursor returned for the same view. Expected success: 200 OK.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes?view=active&limit=30",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes"],
+              "query": [
+                {
+                  "key": "view",
+                  "value": "active",
+                  "description": "Allowed values: active, archived, trash."
+                },
+                {
+                  "key": "limit",
+                  "value": "30",
+                  "description": "Integer from 1 through 50."
+                },
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "Enable only after pasting nextCursor from the same view.",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Note",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "description": "Gets one owned note. Expected success: 200 OK with the current note ETag.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/:noteId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", ":noteId"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "c222222222222222222222222",
+                  "description": "Validator-valid example; replace with an owned note CUID."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Note",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "\"1\"",
+                "description": "Required strict quoted positive integer ETag. Replace \"1\" with the latest note ETag; an unquoted 1 is invalid."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Postman note\",\n  \"content\": \"Updated through the Notes API.\",\n  \"color\": \"TEAL\",\n  \"isPinned\": true\n}"
+            },
+            "description": "Updates at least one allowed field on an untrashed note. Pinning requires an active, non-archived note. Expected success: 200 OK with an incremented ETag.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/:noteId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", ":noteId"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "c222222222222222222222222",
+                  "description": "Validator-valid example; replace with an owned note CUID."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "\"1\"",
+                "description": "Required strict quoted positive integer ETag. Replace \"1\" with the latest note ETag; an unquoted 1 is invalid."
+              }
+            ],
+            "description": "Archives an active, untrashed note and clears its pinned state. Expected success: 200 OK with an incremented ETag.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/:noteId/archive",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", ":noteId", "archive"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "c222222222222222222222222",
+                  "description": "Validator-valid example; replace with an owned note CUID."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unarchive Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "\"1\"",
+                "description": "Required strict quoted positive integer ETag. Replace \"1\" with the latest note ETag; an unquoted 1 is invalid."
+              }
+            ],
+            "description": "Returns an archived, untrashed note to the active view. Expected success: 200 OK with an incremented ETag.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/:noteId/unarchive",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", ":noteId", "unarchive"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "c222222222222222222222222",
+                  "description": "Validator-valid example; replace with an owned note CUID."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Trash Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "\"1\"",
+                "description": "Required strict quoted positive integer ETag. Replace \"1\" with the latest note ETag; an unquoted 1 is invalid."
+              }
+            ],
+            "description": "Moves an untrashed note to trash. Expected success: 200 OK with an incremented ETag.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/:noteId/trash",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", ":noteId", "trash"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "c222222222222222222222222",
+                  "description": "Validator-valid example; replace with an owned note CUID."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Restore Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "\"1\"",
+                "description": "Required strict quoted positive integer ETag. Replace \"1\" with the latest note ETag; an unquoted 1 is invalid."
+              }
+            ],
+            "description": "Restores a trashed note while retaining its archived state, if any. Expected success: 200 OK with an incremented ETag.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/:noteId/restore",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", ":noteId", "restore"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "c222222222222222222222222",
+                  "description": "Validator-valid example; replace with an owned note CUID."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Permanently Delete Note",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "\"1\"",
+                "description": "Required strict quoted positive integer ETag. Replace \"1\" with the latest note ETag; an unquoted 1 is invalid."
+              }
+            ],
+            "description": "Accepts permanent deletion of a trashed note and its images. Expected success: 202 Accepted; durable cleanup may finish asynchronously.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/:noteId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", ":noteId"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "c222222222222222222222222",
+                  "description": "Validator-valid example; replace with an owned trashed note CUID."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Image Upload Intent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mimeType\": \"image/png\",\n  \"sizeBytes\": 1024\n}"
+            },
+            "description": "Step 1 of image upload. Reserve an image for an untrashed note using image/jpeg, image/png, or image/webp and the exact positive file size up to 10485760 bytes. Expected success: 201 Created. Next, upload the exact bytes with the response's method, exact uploadUrl, and exact Content-Type before uploadExpiresAt. Do not persist or share that short-lived URL.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/:noteId/images/upload-intents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", ":noteId", "images", "upload-intents"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "c222222222222222222222222",
+                  "description": "Validator-valid example; replace with an owned, untrashed note CUID."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirm Note Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "\"1\"",
+                "description": "Required strict quoted positive integer ETag. Replace \"1\" with the latest note ETag; an unquoted 1 is invalid."
+              }
+            ],
+            "description": "Step 3 of image upload, after uploading the exact bytes requested by the intent. Confirms the returned imageId against storage metadata and makes it visible. Expected success: 200 OK with an incremented ETag.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/:noteId/images/:imageId/confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", ":noteId", "images", ":imageId", "confirm"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "c222222222222222222222222",
+                  "description": "Validator-valid example; use the same owned note CUID used for the upload intent."
+                },
+                {
+                  "key": "imageId",
+                  "value": "c333333333333333333333333",
+                  "description": "Validator-valid example; replace with imageId returned by the upload intent."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reorder Note Images",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "\"1\"",
+                "description": "Required strict quoted positive integer ETag. Replace \"1\" with the latest note ETag; an unquoted 1 is invalid."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"imageIds\": [\n    \"c333333333333333333333333\"\n  ]\n}"
+            },
+            "description": "Replaces the order for an untrashed note. imageIds must be unique validator-valid CUIDs and must include every ready image exactly once, with at most 10 entries. Expected success: 200 OK with an incremented ETag.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/:noteId/images/order",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", ":noteId", "images", "order"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "c222222222222222222222222",
+                  "description": "Validator-valid example; replace with an owned, untrashed note CUID."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Note Image",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "If-Match",
+                "value": "\"1\"",
+                "description": "Required strict quoted positive integer ETag. Replace \"1\" with the latest note ETag; an unquoted 1 is invalid."
+              }
+            ],
+            "description": "Removes one ready image from an untrashed note and normalizes the remaining positions. Expected success: 200 OK with an incremented ETag.",
+            "url": {
+              "raw": "{{baseUrl}}/api/notes/:noteId/images/:imageId",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notes", ":noteId", "images", ":imageId"],
+              "variable": [
+                {
+                  "key": "noteId",
+                  "value": "c222222222222222222222222",
+                  "description": "Validator-valid example; replace with an owned, untrashed note CUID."
+                },
+                {
+                  "key": "imageId",
+                  "value": "c333333333333333333333333",
+                  "description": "Validator-valid example; replace with a ready image CUID belonging to this note."
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Internal Maintenance",
+          "description": "Server-to-server maintenance only. Keep {{cronSecret}} empty in the shared collection and set it locally from an authorized environment when needed.",
+          "item": [
+            {
+              "name": "Cleanup Notes",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{cronSecret}}"
+                  }
+                ],
+                "description": "Runs the internal note and image cleanup worker. Expected success: 200 OK with cleanup counters. This route uses the cron secret, not a user access token.",
+                "url": {
+                  "raw": "{{baseUrl}}/api/internal/notes/cleanup",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "internal", "notes", "cleanup"]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
     }
   ],
   "event": [],
@@ -879,6 +1339,11 @@
     },
     {
       "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cronSecret",
       "value": "",
       "type": "string"
     }
