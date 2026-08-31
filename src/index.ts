@@ -1,5 +1,5 @@
-import cors from "cors";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import express, { type Request, type Response } from "express";
 
 import { env } from "./config/env";
@@ -31,7 +31,7 @@ app.use(
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "If-Match"],
     exposedHeaders: ["ETag"],
-    credentials: true,
+    credentials: true
   })
 );
 
