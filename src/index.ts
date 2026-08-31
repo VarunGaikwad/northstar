@@ -23,9 +23,15 @@ const app = express();
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || env.TRUSTED_ORIGINS.includes(origin)) {
+      const isTrustedOrigin =
+        !origin ||
+        env.TRUSTED_ORIGINS.includes(origin) ||
+        origin.startsWith("chrome-extension://");
+
+      if (isTrustedOrigin) {
         return callback(null, true);
       }
+
       return callback(new ApiError("Origin is not allowed", 403));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
