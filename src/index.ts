@@ -4,7 +4,6 @@ import express, { type Request, type Response } from "express";
 
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/errorHandler";
-import { ApiError } from "./utils/ApiError";
 
 import attendanceRoutes from "./modules/attendance/attendance.routes";
 import authRoutes from "./modules/auth/auth.routes";
@@ -23,20 +22,31 @@ const app = express();
 app.use(
   cors({
     origin: (origin, callback) => {
-      const isTrustedOrigin =
-        !origin ||
-        env.TRUSTED_ORIGINS.includes(origin) ||
-        origin.startsWith("chrome-extension://");
+      console.log("CORS Origin:", origin);
 
-      if (isTrustedOrigin) {
+      // Allow requests with no Origin header
+      if (!origin) {
         return callback(null, true);
       }
 
-      return callback(new ApiError("Origin is not allowed", 403));
+      // Allow trusted websites and Chrome extensions
+      if (
+        env.TRUSTED_ORIGINS.includes(origin) ||
+        origin.startsWith("chrome-extension://")
+      ) {
+        return callback(null, true);
+      }
+
+      // Reject untrusted origins
+      return callback(null, false);
     },
+
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+
     allowedHeaders: ["Content-Type", "Authorization", "If-Match"],
+
     exposedHeaders: ["ETag"],
+
     credentials: true
   })
 );
