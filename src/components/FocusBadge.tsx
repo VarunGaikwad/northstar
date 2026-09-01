@@ -37,16 +37,18 @@ export function FocusBadge({ onClick }: FocusBadgeProps) {
   return (
     <button
       type="button"
+      aria-label={label}
+      title={`${label} (Alt+A)`}
       onClick={onClick}
-      className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold text-white/90 transition-all cursor-pointer shadow-sm active:scale-95 ${
+      className={`flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-full border text-xs font-semibold text-white/90 transition-all cursor-pointer shadow-sm active:scale-95 ${
         active
           ? "bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-400/30"
           : "bg-white/[0.08] hover:bg-white/[0.15] border-white/10"
       }`}
     >
       {dot ?? <Clock className="w-3.5 h-3.5 text-emerald-400" />}
-      <span className="tabular-nums">{label}</span>
-      <kbd className="hidden sm:inline-block rounded bg-white/10 px-1 py-0.5 text-[10px] font-medium text-white/50">Alt+A</kbd>
+      <span className="hidden md:inline tabular-nums">{label}</span>
+      <kbd className="hidden 2xl:inline-block rounded bg-white/10 px-1 py-0.5 text-[10px] font-medium text-white/50">Alt+A</kbd>
     </button>
   );
 }

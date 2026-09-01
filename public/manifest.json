@@ -5,7 +5,10 @@
   "description": "Northstar is a lightweight, open-source attendance and time tracking tool designed for small teams and organizations. It provides an easy way to track work hours, manage attendance, and generate reports.",
   "author": "Varun Gaikwad",
   "permissions": ["tabs", "storage", "activeTab", "geolocation"],
-  "host_permissions": ["https://northstar-backend-five.vercel.app/*"],
+  "host_permissions": [
+    "https://northstar-backend-five.vercel.app/*",
+    "https://*.supabase.co/*"
+  ],
   "chrome_url_overrides": {
     "newtab": "index.html"
   },

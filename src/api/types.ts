@@ -296,3 +296,70 @@ export interface AttendanceMonth {
 export interface AttendanceEditHistory {
   edits: AttendanceEdit[];
 }
+
+export type NoteColor =
+  | "DEFAULT"
+  | "RED"
+  | "ORANGE"
+  | "YELLOW"
+  | "GREEN"
+  | "TEAL"
+  | "BLUE"
+  | "PURPLE"
+  | "PINK"
+  | "BROWN"
+  | "GRAY";
+
+export type NoteView = "active" | "archived" | "trash";
+export type NoteImageMimeType = "image/jpeg" | "image/png" | "image/webp";
+
+export interface NoteImage {
+  id: string;
+  mimeType: NoteImageMimeType;
+  sizeBytes: number;
+  position: number;
+  url: string;
+  urlExpiresAt: string;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  color: NoteColor;
+  isPinned: boolean;
+  archivedAt: string | null;
+  trashedAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  images: NoteImage[];
+}
+
+export interface NotePage {
+  items: Note[];
+  nextCursor: string | null;
+}
+
+export interface CreateNoteInput {
+  title?: string;
+  content?: string;
+  color?: NoteColor;
+}
+
+export interface UpdateNoteInput {
+  title?: string;
+  content?: string;
+  color?: NoteColor;
+  isPinned?: boolean;
+}
+
+export interface NoteUploadIntent {
+  imageId: string;
+  uploadUrl: string;
+  uploadExpiresAt: string;
+  method: "PUT";
+  headers: {
+    "Content-Type": NoteImageMimeType;
+  };
+}

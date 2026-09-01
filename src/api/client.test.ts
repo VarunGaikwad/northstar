@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyAuthData, clearAuthState, getAuthState } from "../auth/session";
 import type { AuthResponse, User } from "./types";
-import { apiGet, apiPublicGet } from "./client";
+import { apiGet, apiPost, apiPublicGet } from "./client";
 
 const user: User = {
   id: "user-one",
@@ -94,6 +94,33 @@ describe("authenticated API requests", () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(getAuthState().accessToken).toBe("new-token");
+  });
+
+  it("does not retry a request under a different user's session", async () => {
+    applyAuthData(authData("user-one-token"), false);
+    let resolveRequest!: (response: Response) => void;
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = apiPost("/notes", { title: "Private draft" });
+    applyAuthData(
+      {
+        ...authData("user-two-token"),
+        user: { ...user, id: "user-two", email: "two@example.com" },
+      },
+      false,
+    );
+    resolveRequest(
+      jsonResponse({ success: false, error: "Access token expired" }, 401),
+    );
+
+    await expect(request).rejects.toMatchObject({ status: 401 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("never refreshes a public request", async () => {

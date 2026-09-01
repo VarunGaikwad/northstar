@@ -94,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearUserPersistentCache(oldUserId);
       queryClient.removeQueries({ queryKey: ["favlinks", oldUserId] });
       queryClient.removeQueries({ queryKey: ["folders", oldUserId] });
+      queryClient.removeQueries({ queryKey: ["notes", oldUserId] });
       queryClient.removeQueries({ queryKey: ["me"] });
     }
     previousUserId.current = currentUserId;

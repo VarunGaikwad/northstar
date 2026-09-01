@@ -11,6 +11,7 @@ import { QuickAccess } from "./components/QuickAccess";
 import { SearchBar } from "./components/SearchBar";
 import { TopNav } from "./components/TopNav";
 import { WeatherWidget } from "./components/WeatherWidget";
+import { NotesWorkspace } from "./features/notes/NotesWorkspace";
 import { useIsOnline } from "./hooks/useIsOnline";
 import { usePrefetchDrawers } from "./hooks/usePrefetchDrawers";
 import { Badge } from "./components/ui";
@@ -19,7 +20,9 @@ const DEFAULT_BACKGROUND =
   "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80";
 
 export default function Dashboard() {
-  const [activeDrawer, setActiveDrawer] = useState<"links" | "lrt" | "attendance" | "weather" | null>(null);
+  const [activeDrawer, setActiveDrawer] = useState<
+    "links" | "lrt" | "attendance" | "weather" | "notes" | null
+  >(null);
   const { data: backgroundResponse } = useBackground();
   const online = useIsOnline();
   const background = backgroundResponse?.image;
@@ -33,15 +36,25 @@ export default function Dashboard() {
       switch (e.key.toLowerCase()) {
         case "l":
           e.preventDefault();
-          setActiveDrawer((d) => (d === "links" ? null : "links"));
+          setActiveDrawer((d) =>
+            d === "notes" ? d : d === "links" ? null : "links",
+          );
           break;
         case "a":
           e.preventDefault();
-          setActiveDrawer((d) => (d === "attendance" ? null : "attendance"));
+          setActiveDrawer((d) =>
+            d === "notes" ? d : d === "attendance" ? null : "attendance",
+          );
           break;
         case "t":
           e.preventDefault();
-          setActiveDrawer((d) => (d === "lrt" ? null : "lrt"));
+          setActiveDrawer((d) =>
+            d === "notes" ? d : d === "lrt" ? null : "lrt",
+          );
+          break;
+        case "n":
+          e.preventDefault();
+          setActiveDrawer("notes");
           break;
       }
     };
@@ -76,6 +89,7 @@ export default function Dashboard() {
       {/* Top Navigation */}
       <TopNav
         onOpenLinks={() => setActiveDrawer("links")}
+        onOpenNotes={() => setActiveDrawer("notes")}
         onOpenLrt={() => setActiveDrawer("lrt")}
         onOpenAttendance={() => setActiveDrawer("attendance")}
         onOpenWeather={() => setActiveDrawer("weather")}
@@ -143,6 +157,14 @@ export default function Dashboard() {
           <WeatherWidget />
         </ErrorBoundary>
       </Drawer>
+
+      {activeDrawer === "notes" && (
+        <div className="fixed inset-0 z-40">
+          <ErrorBoundary modal>
+            <NotesWorkspace onClose={() => setActiveDrawer(null)} />
+          </ErrorBoundary>
+        </div>
+      )}
     </div>
   );
 }
