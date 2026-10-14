@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Use pinned npm version
+        run: npm install --global npm@11.13.0
+      - name: Install workspaces
+        run: npm ci
+      - name: Build applications
+        run: npm run build
+      - name: Lint applications
+        run: npm run lint
+      - name: Test applications
+        run: npm test

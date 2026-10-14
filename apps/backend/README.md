@@ -2,6 +2,13 @@
 
 Express + TypeScript + Prisma + NeonDB starter with authentication.
 
+This application is the `northstar-backend` npm workspace in the
+[Northstar monorepo](../../README.md). Install dependencies from the repository
+root with `npm ci`; keep backend environment variables in `apps/backend/.env`.
+From the root, use `npm run dev:backend` or append
+`--workspace=northstar-backend` when running other backend scripts. The commands
+below also work from this application directory after the root install.
+
 ## Folder structure
 
 ```

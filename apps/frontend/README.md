@@ -1,83 +1,35 @@
-# React + TypeScript + Vite
+# Northstar Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite, with Tailwind and the React Compiler enabled.
+This application is the `northstar-frontend` npm workspace in the
+[Northstar monorepo](../../README.md).
 
-Currently, two official plugins are available:
+## Development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Install from the repository root with `npm ci`. Copy this application's
+`.env.example` to `.env` and set `VITE_API_BASE=/api` for local development.
+The Vite server proxies `/api` to `http://localhost:3000`; without an override,
+the API configuration retains its existing deployed backend fallback.
 
-## React Compiler
+From the repository root:
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
-
-Note: This will impact Vite dev & build performances.
-
-## Authentication & API
-
-- Copy `.env.example` to `.env` and set `VITE_API_BASE` and `VITE_DEFAULT_TZ`.
-- The dev server proxies `/api` to `http://localhost:3000` (see `vite.config.ts`).
-- The JWT access token is stored in `localStorage` under `auth.token` and the user profile under `auth.user`. Both are cleared on logout and when the API returns a `401`.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```sh
+npm run dev:frontend
+npm run build --workspace=northstar-frontend
+npm run lint --workspace=northstar-frontend
+npm test --workspace=northstar-frontend
+npm run preview --workspace=northstar-frontend
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Public build output is `apps/frontend/dist`. `VITE_*` variables are included in
+browser code and must never contain backend secrets.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Authentication
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Access-token/session handling is implemented in `src/auth/session.ts` and
+`src/api/client.ts`. See [`FRONTEND_AUTH_MIGRATION.md`](FRONTEND_AUTH_MIGRATION.md)
+for the renewable-session contract; do not implement legacy localStorage JWT
+handling from older template documentation.
 
-```
+The repository move does not change API endpoints, production API configuration,
+or the extension manifest. See the root README for deployment setup.
