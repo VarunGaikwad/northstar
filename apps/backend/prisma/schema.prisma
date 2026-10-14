@@ -1,0 +1,265 @@
+// Prisma schema for Northstar backend (NeonDB / PostgreSQL)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────────────────────────────────────
+// User account domain (Phase 1)
+// ───────────────────────────────────────────────────────────
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  passwordHash        String
+  firstName           String?
+  lastName            String?
+  role                Role      @default(USER)
+  isVerified          Boolean   @default(false)
+  isActive            Boolean   @default(true)
+  resetToken          String?   @unique
+  resetTokenExpiresAt DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  folders      Folder[]
+  favlinks     FavLink[]
+  attendance   Attendance[]  @relation("UserAttendance")
+  authSessions AuthSession[]
+  notes        Note[]
+
+  @@index([isActive])
+  @@index([resetToken])
+}
+
+model AuthSession {
+  id                String    @id @default(cuid())
+  userId            String
+  refreshVersion    Int       @default(0)
+  refreshIssuedAt   DateTime
+  lastUsedAt        DateTime
+  idleExpiresAt     DateTime
+  absoluteExpiresAt DateTime
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([idleExpiresAt])
+  @@index([absoluteExpiresAt])
+}
+
+model Folder {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  parentId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   Folder?   @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Folder[]  @relation("FolderTree")
+  favlinks FavLink[]
+
+  @@index([userId])
+  @@index([parentId])
+}
+
+model FavLink {
+  id        String   @id @default(cuid())
+  userId    String
+  folderId  String?
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder Folder? @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([folderId])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// ───────────────────────────────────────────────────────────────
+// Private notes
+// ───────────────────────────────────────────────────────────────
+model Note {
+  id               String    @id @default(cuid())
+  userId           String
+  title            String    @default("") @db.VarChar(200)
+  content          String    @default("")
+  color            NoteColor @default(DEFAULT)
+  isPinned         Boolean   @default(false)
+  archivedAt       DateTime?
+  trashedAt        DateTime?
+  purgeRequestedAt DateTime?
+  version          Int       @default(1)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  images NoteImage[]
+
+  @@index([userId, trashedAt, archivedAt, isPinned, updatedAt, id])
+  @@index([userId, trashedAt, id])
+  @@index([trashedAt, purgeRequestedAt])
+  @@index([purgeRequestedAt])
+  @@index([purgeRequestedAt, updatedAt])
+}
+
+model NoteImage {
+  id                   String          @id @default(cuid())
+  noteId               String
+  storagePath          String          @unique
+  mimeType             String
+  sizeBytes            Int
+  position             Int?
+  status               NoteImageStatus @default(PENDING)
+  uploadExpiresAt      DateTime?
+  uploadTokenExpiresAt DateTime
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId, status, position])
+  @@index([status, uploadExpiresAt])
+  @@index([status, uploadTokenExpiresAt])
+  @@index([status, updatedAt, uploadTokenExpiresAt])
+}
+
+enum NoteColor {
+  DEFAULT
+  RED
+  ORANGE
+  YELLOW
+  GREEN
+  TEAL
+  BLUE
+  PURPLE
+  PINK
+  BROWN
+  GRAY
+}
+
+enum NoteImageStatus {
+  PENDING
+  READY
+  DELETE_PENDING
+}
+
+// ───────────────────────────────────────────────────────────────
+// Utsunomiya-Haga LRT timetable (2026/4/1 改正)
+// ───────────────────────────────────────────────────────────────
+model LrtStation {
+  id         String        @id @default(cuid())
+  code       Int           @unique // inbound order 0..18
+  name       String
+  nameEn     String?
+  nameRomaji String?
+  createdAt  DateTime      @default(now())
+  stopTimes  LrtStopTime[]
+}
+
+model LrtTrip {
+  id              String        @id @default(cuid())
+  dayType         LrtDayType
+  direction       LrtDirection
+  trainType       LrtTrainType
+  tripIndex       Int
+  firstDepartMins Int
+  createdAt       DateTime      @default(now())
+  stopTimes       LrtStopTime[]
+
+  @@unique([dayType, direction, tripIndex])
+  @@index([dayType, direction])
+}
+
+model LrtStopTime {
+  id            String      @id @default(cuid())
+  tripId        String
+  trip          LrtTrip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  stationId     String
+  station       LrtStation  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  stopSequence  Int
+  arrivalMins   Int?
+  departureMins Int?
+  isNextDay     Boolean     @default(false)
+  stopType      LrtStopType
+
+  @@unique([tripId, stationId])
+  @@index([tripId])
+  @@index([stationId])
+}
+
+enum LrtDayType {
+  WEEKDAY
+  HOLIDAY
+}
+
+enum LrtDirection {
+  INBOUND // 上り — towards Utsunomiya Station East Exit
+  OUTBOUND // 下り — towards Haga-Takanezawa Industrial Park
+}
+
+enum LrtTrainType {
+  LOCAL // 各停
+  RAPID // 快速
+}
+
+enum LrtStopType {
+  STOP
+  PASS
+  NOSERVICE
+}
+
+// ───────────────────────────────────────────────────────────────
+// Attendance tracking (clock-in / clock-out)
+// One check-in + one check-out per user per day (in the record's timezone).
+// ───────────────────────────────────────────────────────────────
+model Attendance {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation("UserAttendance", fields: [userId], references: [id], onDelete: Cascade)
+  date       String // YYYY-MM-DD in the record's timezone
+  timezone   String           @default("UTC") // IANA tz name (e.g. Asia/Tokyo)
+  checkInAt  DateTime?
+  checkOutAt DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  edits      AttendanceEdit[]
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+}
+
+model AttendanceEdit {
+  id           String          @id @default(cuid())
+  attendanceId String
+  attendance   Attendance      @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  userId       String // who performed the edit (plain column, no FK)
+  field        AttendanceField
+  oldValue     DateTime?
+  newValue     DateTime?
+  reason       String?
+  editedAt     DateTime        @default(now())
+
+  @@index([attendanceId])
+}
+
+enum AttendanceField {
+  CHECK_IN
+  CHECK_OUT
+}

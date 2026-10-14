@@ -1,0 +1,50 @@
+# ── Dependencies ────────────────────────────────────────────────
+node_modules/
+
+# ── Build output ───────────────────────────────────────────────
+dist/
+*.tsbuildinfo
+
+# ── Environment / secrets ─────────────────────────────────────
+.env
+.env.local
+.env.*.local
+# Keep .env.example tracked (template, no secrets).
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── OS junk ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editor / IDE ───────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── pi coding agent (local session state) ─────────────────────
+.pi/
+
+# ── Prisma ────────────────────────────────────────────────────
+# Generated client lives in node_modules/@prisma/client (already ignored).
+# lrdata.json is a derived artefact (1.7MB), regenerable from the PDFs via
+# `npm run parse:lrt` — don't commit it; the source PDFs are tracked.
+prisma/lrdata.json
+
+# ── LRT PDF parsing scratch output ─────────────────────────────
+# The parser writes these intermediate text dumps during debugging.
+lrt/_extracted.txt
+lrt/_all_tables.txt
+lrt/_table_*.txt
+
+# ── Test / coverage ────────────────────────────────────────────
+coverage/
+.nyc_output/
