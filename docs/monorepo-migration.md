@@ -44,13 +44,15 @@ Local, ignored backups:
 ├── backend.bundle
 ├── frontend.bundle
 └── originals/
-    ├── northstar-backend/   # entire original working directory, including .git
-    └── northstar-frontend/  # entire original working directory, including .git
+    ├── northstar-backend/   # original source/local files and .git
+    └── northstar-frontend/  # original source/local files and .git
 ```
 
 Both source worktrees were clean before import. Bundles include all original
 refs and were verified before moving directories. The original directories also
 preserve ignored/local files; those files were not copied into the active apps.
+Only `node_modules` folders generated during baseline checks were removed to
+free disk space for fresh-clone verification. Source and Git backups are intact.
 Copy any needed local configuration manually, without committing secrets.
 
 These backups are local only, not off-machine disaster recovery. Keep them until
@@ -71,6 +73,7 @@ Baseline and migrated results on Node 24.17.0 / npm 11.13.0:
 | Dependency versions and integrity hashes | Separate lockfiles | Preserved in root lockfile |
 | Root `npm ci`, no app secrets | Not applicable | Pass |
 | Root `npm run prisma:generate`, no URL | Not applicable | Pass |
+| Fresh clone: install, build, lint, Prisma generation, tests | Not applicable | Install/build/lint/generation pass; tests match baseline |
 | `prisma migrate status`, no URL | Config load fails | Explicit missing datasource URL error; no connection |
 | Backend dev startup / health | Not tested before move | Pass on port 3100 with non-production placeholder config |
 | Frontend dev startup / HTML | Not tested before move | Pass on port 5173 |
