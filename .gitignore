@@ -1,0 +1,22 @@
+# Dependencies and build output
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+coverage/
+.nyc_output/
+*.lcov
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and editor files
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+
+# Local agent state and pre-migration backups
+.pi/
