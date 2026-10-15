@@ -19,6 +19,7 @@ main { max-width: 960px; margin: auto; } nav { display: flex; flex-wrap: wrap; g
 a { color: #c7d2fe; } h1 { font-size: clamp(28px, 5vw, 42px); margin-bottom: 12px; letter-spacing: -.03em; }
 p { line-height: 1.6; color: #c4cadb; } form { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; margin: 32px 0; }
 label { display: grid; gap: 8px; flex: 1 1 180px; } input, select, button { font: inherit; min-height: 48px; border: 1px solid #64748b; border-radius: 8px; padding: 12px; color: #fff; background: #172139; max-width: 100%; }
+#timetable-form label, #timetable-form select { min-width: 0; }
 button { background: #4f46e5; cursor: pointer; font-weight: 650; } button:disabled { opacity: .6; cursor: wait; }
 :focus-visible { outline: 3px solid #c7d2fe; outline-offset: 3px; }
 #status { min-height: 26px; } details { border-top: 1px solid #475569; padding: 16px 0; } summary { cursor: pointer; line-height: 1.7; }

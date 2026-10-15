@@ -38,7 +38,7 @@ When adding a new domain, create a folder under `src/modules/` with `*.routes.ts
 
 - `/forgot-password` — request a password reset email without signing in.
 - `/reset-password?token=…` — choose a new password using the emailed link; also links back to request a new email.
-- `/lrt` — public timetable with date, direction and schedule filters, expandable train stops and next-day times. Neither the page nor its timetable API requires authentication.
+- `/lrt` — public timetable with From/To station selectors, date and schedule filters, departure/arrival times and expandable journey stops. Leave both stations blank to browse the full timetable with a direction filter. The page and its stations, search and timetable APIs require no authentication.
 
 Set `PUBLIC_BACKEND_URL` to the exact backend origin (HTTPS in production) so recovery links and same-origin recovery requests work. Configure SMTP for production email delivery. LRT requires timetable data loaded with `npm run seed:lrt --workspace=northstar-backend`.
 
