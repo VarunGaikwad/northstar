@@ -129,9 +129,7 @@ function parseExtensionOrigins(value: string): string[] {
   return [...new Set(origins)];
 }
 
-// FRONTEND_URL may be a single URL or a comma-separated list of allowed
-// frontend origins (CORS). The first entry is the canonical URL used for
-// password-reset email links (src/utils/email.ts).
+// FRONTEND_URL contains frontend origins for CORS, not recovery-page links.
 const frontendUrls = parseWebOrigins(process.env.FRONTEND_URL ?? "http://localhost:5173");
 if (frontendUrls.length === 0) {
   frontendUrls.push("http://localhost:5173");
@@ -180,15 +178,25 @@ export const env = {
 
   BCRYPT_SALT_ROUNDS: Number(getEnvVar("BCRYPT_SALT_ROUNDS", "12")),
 
-  // Optional SMTP config. If omitted, password-reset emails are logged to the
-  // console instead of being sent.
+  // SMTP is required for production recovery. Development can log reset links.
   SMTP_HOST: process.env.SMTP_HOST,
   SMTP_PORT: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined,
   SMTP_USER: process.env.SMTP_USER,
   SMTP_PASS: process.env.SMTP_PASS,
   EMAIL_FROM: process.env.EMAIL_FROM ?? "no-reply@northstar.app",
 
-  // First/canonical frontend URL (used in password-reset email links).
+  // Lazy to avoid blocking unrelated endpoints when recovery is unconfigured.
+  get PUBLIC_BACKEND_URL(): string {
+    const value = process.env.PUBLIC_BACKEND_URL ??
+      (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000");
+    const origins = parseWebOrigins(value);
+    if (origins.length !== 1 ||
+        (process.env.NODE_ENV === "production" && !origins[0].startsWith("https://"))) {
+      throw new Error("PUBLIC_BACKEND_URL must be one public HTTPS origin in production");
+    }
+    return origins[0];
+  },
+
   FRONTEND_URL: frontendUrls[0],
   // All allowed frontend origins, for CORS. One or more comma-separated URLs.
   FRONTEND_URLS: frontendUrls,

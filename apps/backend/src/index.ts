@@ -7,6 +7,7 @@ import { errorHandler } from "./middleware/errorHandler";
 
 import attendanceRoutes from "./modules/attendance/attendance.routes";
 import authRoutes from "./modules/auth/auth.routes";
+import { resetPasswordPage } from "./modules/auth/reset-page";
 import backgroundRoutes from "./modules/background/background.routes";
 import favlinkRoutes from "./modules/favlinks/favlinks.routes";
 import folderRoutes from "./modules/folders/folders.routes";
@@ -61,6 +62,8 @@ app.get("/health", (_req: Request, res: Response) => {
 app.get("/", (_req: Request, res: Response) => {
   res.send("Hello, NorthStar ⭐!");
 });
+
+app.get("/reset-password", resetPasswordPage);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);

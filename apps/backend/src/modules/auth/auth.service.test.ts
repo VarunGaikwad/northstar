@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
 import type { AuthSession, Prisma, User } from "@prisma/client";
-import { hashSync } from "bcryptjs";
+import { compareSync, hashSync } from "bcryptjs";
 import { env } from "../../config/env";
 import { prisma } from "../../db/prisma";
 import { ApiError } from "../../utils/ApiError";
@@ -429,9 +429,10 @@ test("password reset updates the password and revokes all sessions transactional
     resetTokenExpiresAt: new Date(now.getTime() + 60_000),
   });
   mockPrismaMethod(t, prisma.user, "findUnique", () => Promise.resolve(resettingUser));
-  const updateUser = mockPrismaMethod(t, prisma.user, "update", () =>
-    Promise.resolve(resettingUser),
-  );
+  const updateUser = mockPrismaMethod(t, prisma.user, "update", (args: { data: Partial<User> }) => {
+    Object.assign(resettingUser, args.data);
+    return Promise.resolve(resettingUser);
+  });
   const revokeSessions = mockPrismaMethod(
     t,
     prisma.authSession,
@@ -445,6 +446,11 @@ test("password reset updates the password and revokes all sessions transactional
 
   assert.equal(transaction.mock.callCount(), 1);
   assert.equal(updateUser.mock.callCount(), 1);
+  assert.equal(compareSync("NewPassword123!", resettingUser.passwordHash), true);
+  assert.equal(compareSync("Password123!", resettingUser.passwordHash), false);
+  assert.equal(resettingUser.resetToken, null);
+  assert.equal(resettingUser.resetTokenExpiresAt, null);
+  await assert.rejects(resetPassword({ token: "reset-token", password: "AnotherPassword123!" }, now), /Invalid or expired/);
   assert.deepEqual(revokeSessions.mock.calls[0]?.arguments[0].where, {
     userId: resettingUser.id,
     revokedAt: null,

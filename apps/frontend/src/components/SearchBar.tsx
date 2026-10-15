@@ -1,9 +1,13 @@
-import { Search, Star, TreeDeciduous, Bookmark, ExternalLink, CornerDownLeft } from "lucide-react";
+import { Search, Star, TreeDeciduous, Bookmark, ExternalLink, CornerDownLeft, Pencil } from "lucide-react";
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useFavLinkSearch, type FavLinkSearchResult } from "../hooks/useFavLinkSearch";
 import { faviconUrl, fallbackFaviconUrl, gradientFor } from "../utils/gradients";
 import { Badge } from "./ui";
+import { LinkFormModal } from "./LinkFormModal";
+import { useUpdateFavLink } from "../api/endpoints/favlinks";
+import type { FavLink } from "../types";
 
 interface SearchEngine {
   id: string;
@@ -91,11 +95,13 @@ function FavlinkSuggestionRow({
   item,
   isSelected,
   onSelect,
+  onEdit,
   onMouseEnter,
 }: {
   item: FavLinkSearchResult;
   isSelected: boolean;
   onSelect: () => void;
+  onEdit: () => void;
   onMouseEnter: () => void;
 }) {
   const primaryIcon = faviconUrl(item.url);
@@ -115,53 +121,66 @@ function FavlinkSuggestionRow({
   const initial = (item.title || "?").trim().charAt(0).toUpperCase();
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
+    <div
       onMouseEnter={onMouseEnter}
-      className={`w-full flex items-center justify-between p-2.5 rounded-xl transition-all text-left cursor-pointer ${
+      className={`w-full flex items-center rounded-xl transition-all ${
         isSelected
           ? "bg-indigo-500/25 border border-indigo-400/50 shadow-md shadow-indigo-500/10"
           : "hover:bg-white/[0.08] border border-transparent"
       }`}
     >
-      <div className="flex items-center gap-3 min-w-0">
-        <div
-          className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradientFor(
-            item.title
-          )} p-1 flex items-center justify-center shrink-0 shadow-sm`}
-        >
-          {showIcon ? (
-            <img
-              src={iconSrc}
-              alt=""
-              className="w-full h-full object-contain rounded"
-              onError={handleIconError}
-            />
-          ) : (
-            <span className="text-xs font-black text-white drop-shadow">
-              {initial}
-            </span>
-          )}
+      <button
+        type="button"
+        onClick={onSelect}
+        className="flex flex-1 items-center justify-between min-w-0 p-2.5 rounded-xl text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-indigo-400"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradientFor(
+              item.title
+            )} p-1 flex items-center justify-center shrink-0 shadow-sm`}
+          >
+            {showIcon ? (
+              <img
+                src={iconSrc}
+                alt=""
+                className="w-full h-full object-contain rounded"
+                onError={handleIconError}
+              />
+            ) : (
+              <span className="text-xs font-black text-white drop-shadow">
+                {initial}
+              </span>
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-white truncate flex items-center gap-1.5">
+              <span className={isSelected ? "text-indigo-200 font-bold" : ""}>{item.title}</span>
+              <ExternalLink className="w-3 h-3 text-white/40 shrink-0" />
+            </div>
+            <div className="text-xs text-white/50 truncate font-mono">
+              {item.displayHost}
+            </div>
+          </div>
         </div>
 
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-white truncate flex items-center gap-1.5">
-            <span className={isSelected ? "text-indigo-200 font-bold" : ""}>{item.title}</span>
-            <ExternalLink className="w-3 h-3 text-white/40 shrink-0" />
-          </div>
-          <div className="text-xs text-white/50 truncate font-mono">
-            {item.displayHost}
-          </div>
-        </div>
-      </div>
-
-      {item.folderName && (
-        <Badge variant="neutral" size="sm" className="shrink-0 ml-2">
-          {item.folderName}
-        </Badge>
-      )}
-    </button>
+        {item.folderName && (
+          <Badge variant="neutral" size="sm" className="shrink-0 ml-2">
+            {item.folderName}
+          </Badge>
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label={`Edit ${item.title}`}
+        title={`Edit ${item.title}`}
+        className="shrink-0 p-2.5 mr-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-indigo-400 cursor-pointer"
+      >
+        <Pencil className="w-4 h-4" aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 
@@ -174,6 +193,11 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [isSpotlightActive, setIsSpotlightActive] = useState(false);
+  const [editingLink, setEditingLink] = useState<FavLink | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const updateLink = useUpdateFavLink();
+  const saveInFlightRef = useRef(false);
+  const returnFocusRef = useRef(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -185,20 +209,29 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
   const { matches } = useFavLinkSearch(query);
   const hasMatches = matches.length > 0;
 
-  const shouldSpotlight = isFocused && query.trim().length > 0;
+  const shouldSpotlight = isFocused && query.trim().length > 0 && !editingLink;
 
-
+  useEffect(() => {
+    if (editingLink || !returnFocusRef.current) return;
+    // Wait until the modal's focus-restoring cleanup has finished.
+    const frame = requestAnimationFrame(() => {
+      returnFocusRef.current = false;
+      inputRef.current?.focus();
+      setIsFocused(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [editingLink]);
 
   // Click outside to dismiss dropdown/spotlight
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (!editingLink && containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsFocused(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [editingLink]);
 
   // Smooth FLIP animation when transitioning between Inline & Spotlight mode
   useLayoutEffect(() => {
@@ -230,6 +263,33 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
       }
     }
   }, [shouldSpotlight, isSpotlightActive]);
+
+  const finishEditing = () => {
+    returnFocusRef.current = true;
+    setSelectedIndex(-1);
+    setEditingLink(null);
+    setEditError(null);
+  };
+
+  const closeEditor = () => {
+    if (saveInFlightRef.current || updateLink.isPending) return;
+    finishEditing();
+  };
+
+  const saveEdit = async (title: string, url: string) => {
+    if (!editingLink || saveInFlightRef.current || updateLink.isPending) return;
+    saveInFlightRef.current = true;
+    setEditError(null);
+    try {
+      // Omitting folderId preserves the bookmark's existing folder.
+      await updateLink.mutateAsync({ id: editingLink.id, title, url });
+      finishEditing();
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Could not save bookmark. Please try again.");
+    } finally {
+      saveInFlightRef.current = false;
+    }
+  };
 
   const toggleEngine = () => {
     const nextIndex = (engineIndex + 1) % ENGINES.length;
@@ -279,7 +339,7 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
       {/* Backdrop Unfocus Overlay when Spotlight is Active */}
       <div
         className={`fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-40 transition-opacity duration-300 ${
-          isSpotlightActive ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          isSpotlightActive && !editingLink ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setIsFocused(false)}
       />
@@ -341,7 +401,7 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
         </form>
 
         {/* Dropdown Suggestions */}
-        {isSpotlightActive && (
+        {isSpotlightActive && !editingLink && (
           <div className="mt-3 rounded-2xl bg-slate-900/95 border border-white/15 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] overflow-hidden max-h-[55vh] overflow-y-auto z-50 animate-fade-up">
             {/* Favlinks Suggestions Section */}
             {hasMatches && (
@@ -357,6 +417,11 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
                     item={item}
                     isSelected={selectedIndex === index}
                     onSelect={() => openLink(item.url)}
+                    onEdit={() => {
+                      setEditError(null);
+                      setSelectedIndex(-1);
+                      setEditingLink(item);
+                    }}
                     onMouseEnter={() => setSelectedIndex(index)}
                   />
                 ))}
@@ -396,6 +461,19 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
           </div>
         )}
       </div>
+
+      {/* Escape the hero's stacking context and search wrapper's FLIP transform. */}
+      {editingLink && createPortal(
+        <LinkFormModal
+          open
+          link={editingLink}
+          onClose={closeEditor}
+          onSave={saveEdit}
+          isSaving={updateLink.isPending}
+          error={editError}
+        />,
+        document.body
+      )}
     </div>
   );
 }

@@ -29,12 +29,12 @@ export function Modal({
       'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
     const focusable = () =>
       Array.from(panel?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
-    focusable()[0]?.focus();
+    (focusable()[0] ?? panel)?.focus();
 
     const observer = panel
       ? new MutationObserver(() => {
           if (!panel.contains(document.activeElement)) {
-            focusable()[0]?.focus();
+            (focusable()[0] ?? panel)?.focus();
           }
         })
       : null;
@@ -49,7 +49,11 @@ export function Modal({
       }
       if (event.key !== "Tab") return;
       const items = focusable();
-      if (items.length === 0) return;
+      if (items.length === 0) {
+        event.preventDefault();
+        panel?.focus();
+        return;
+      }
       const first = items[0];
       const last = items[items.length - 1];
       if (!panel?.contains(document.activeElement)) {
@@ -92,7 +96,7 @@ export function Modal({
         dismissible && e.target === e.currentTarget && onClose()
       }
     >
-      <div ref={panelRef} className="w-full max-w-sm rounded-2xl bg-slate-900/90 backdrop-blur-2xl border border-white/15 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.1)] text-white animate-[pop_0.2s_cubic-bezier(0.16,1,0.3,1)]">
+      <div ref={panelRef} tabIndex={-1} className="w-full max-w-sm rounded-2xl bg-slate-900/90 backdrop-blur-2xl border border-white/15 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.1)] text-white animate-[pop_0.2s_cubic-bezier(0.16,1,0.3,1)]">
         <div className="flex items-center justify-between mb-4">
           <h3 id="modal-title" className="text-lg font-semibold tracking-tight text-white/95">
             {title}

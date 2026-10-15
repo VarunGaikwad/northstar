@@ -53,6 +53,14 @@ model AuthSession {
   @@index([absoluteExpiresAt])
 }
 
+model PasswordResetLimit {
+  id        String   @id
+  count     Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
 model Folder {
   id        String   @id @default(cuid())
   userId    String

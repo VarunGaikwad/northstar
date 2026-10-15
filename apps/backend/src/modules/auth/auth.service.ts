@@ -364,9 +364,13 @@ export async function forgotPassword(data: { email: string }): Promise<void> {
     data: { resetToken: rawToken, resetTokenExpiresAt },
   });
 
-  sendPasswordResetEmail(user.email, rawToken).catch((err: unknown) => {
-    console.error("Failed to send password reset email:", err);
-  });
+  try {
+    // Await delivery acceptance so Vercel cannot suspend the pending SMTP work.
+    await sendPasswordResetEmail(user.email, rawToken);
+  } catch {
+    // SMTP errors can contain recipients, credentials or links. Never log them.
+    console.error("Password reset email delivery failed; check SMTP configuration and provider logs.");
+  }
 }
 
 export async function resetPassword(
