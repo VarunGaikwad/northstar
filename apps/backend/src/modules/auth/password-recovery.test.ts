@@ -58,7 +58,12 @@ test("backend page and recovery routes are wired with origin checks, validation 
   assert.equal(throttled.status, 429);
   assert.equal(throttled.headers.get("retry-after"), "200");
   limited = false;
-  const forgot = await post("forgot-password", { email: "unknown@example.com" }, "http://localhost:5173");
+  const blockedForgot = await post("forgot-password", { email: "unknown@example.com" }, "https://evil.example");
+  assert.equal(blockedForgot.status, 403);
+  const forgot = await post("forgot-password", { email: "unknown@example.com" });
   assert.equal(forgot.status, 200);
   assert.match(((await forgot.json()) as { message: string }).message, /If an account/);
+  limited = true;
+  const limitedForgot = await post("forgot-password", { email: "unknown@example.com" });
+  assert.equal(limitedForgot.status, 429);
 });

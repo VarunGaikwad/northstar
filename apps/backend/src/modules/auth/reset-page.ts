@@ -123,6 +123,7 @@ const style = `
     background: rgba(15,23,42,.85); backdrop-filter: blur(24px); box-shadow: 0 24px 80px #0008, inset 0 1px 0 #ffffff1f; overflow: hidden; }
   aside { padding: 40px 32px; background: linear-gradient(140deg, #6366f12b, #8b5cf614, transparent); border-right: 1px solid #ffffff1a; display: flex; flex-direction: column; justify-content: space-between; gap: 48px; }
   .brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 750; letter-spacing: -.5px; }
+  a { color: #c7d2fe; }
   .compass { color: #a5b4fc; font-size: 32px; line-height: 1; }
   .tagline { font-size: 28px; font-weight: 750; line-height: 1.25; letter-spacing: -.6px; }
   .muted, .intro, .hint, footer { color: #c4cadb; line-height: 1.6; font-size: 14px; }
@@ -225,6 +226,7 @@ export function resetPasswordPage(_req: Request, res: Response): void {
         </fieldset>
       </form>
       <p id="status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></p>
+      <p><a href="/forgot-password">Request a new password reset link</a></p>
       <footer>After resetting, return to the Northstar extension to sign in. This page will not sign you in automatically.</footer>
     </section>
   </main>

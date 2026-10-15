@@ -8,6 +8,8 @@ import { errorHandler } from "./middleware/errorHandler";
 import attendanceRoutes from "./modules/attendance/attendance.routes";
 import authRoutes from "./modules/auth/auth.routes";
 import { resetPasswordPage } from "./modules/auth/reset-page";
+import { forgotPasswordPage } from "./modules/auth/forgot-page";
+import { lrtPage } from "./modules/lrt/lrt-page";
 import backgroundRoutes from "./modules/background/background.routes";
 import favlinkRoutes from "./modules/favlinks/favlinks.routes";
 import folderRoutes from "./modules/folders/folders.routes";
@@ -64,6 +66,8 @@ app.get("/", (_req: Request, res: Response) => {
 });
 
 app.get("/reset-password", resetPasswordPage);
+app.get("/forgot-password", forgotPasswordPage);
+app.get("/lrt", lrtPage);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
