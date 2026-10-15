@@ -11,7 +11,9 @@ test("forgot password awaits SMTP, hides delivery errors, and does no mail work 
   let finish: () => void = () => {};
   let fail = false;
   const send = t.mock.fn(async () => {
-    if (fail) throw new Error("private recipient token credentials");
+    if (fail) throw Object.assign(new Error("private recipient token credentials"), {
+      code: "EAUTH", responseCode: 535, response: "private SMTP response",
+    });
     await new Promise<void>((resolve) => { finish = resolve; });
     return { rejected: [] };
   });
@@ -41,7 +43,8 @@ test("forgot password awaits SMTP, hides delivery errors, and does no mail work 
   const log = t.mock.method(console, "error", () => {});
   await assert.doesNotReject(forgotPassword({ email: "private@example.com" }));
   assert.equal(log.mock.callCount(), 1);
-  assert.doesNotMatch(JSON.stringify(log.mock.calls), /private recipient token credentials/);
+  assert.doesNotMatch(JSON.stringify(log.mock.calls), /private recipient token credentials|private SMTP response/);
+  assert.deepEqual(log.mock.calls[0].arguments[1], { code: "EAUTH", responseCode: 535 });
   known = false;
   await forgotPassword({ email: "unknown@example.com" });
   assert.equal(send.mock.callCount(), 2);

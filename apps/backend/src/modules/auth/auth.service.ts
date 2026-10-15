@@ -4,6 +4,7 @@ import { env } from "../../config/env";
 import { prisma } from "../../db/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { sendPasswordResetEmail } from "../../utils/email";
+import { emailErrorDetails } from "../../utils/email-error";
 import { comparePassword, hashPassword } from "../../utils/hash";
 import {
   signAccessToken,
@@ -367,9 +368,8 @@ export async function forgotPassword(data: { email: string }): Promise<void> {
   try {
     // Await delivery acceptance so Vercel cannot suspend the pending SMTP work.
     await sendPasswordResetEmail(user.email, rawToken);
-  } catch {
-    // SMTP errors can contain recipients, credentials or links. Never log them.
-    console.error("Password reset email delivery failed; check SMTP configuration and provider logs.");
+  } catch (error) {
+    console.error("Password reset email delivery failed; check SMTP configuration and provider logs.", emailErrorDetails(error));
   }
 }
 

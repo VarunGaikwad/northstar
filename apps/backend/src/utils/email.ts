@@ -25,13 +25,18 @@ export async function sendPasswordResetEmail(
   to: string,
   token: string
 ): Promise<void> {
-  const url = new URL("/reset-password", env.PUBLIC_BACKEND_URL);
+  let url: URL;
+  try {
+    url = new URL("/reset-password", env.PUBLIC_BACKEND_URL);
+  } catch {
+    throw Object.assign(new Error("Password reset backend URL is invalid"), { code: "ERESETURL" });
+  }
   url.searchParams.set("token", token);
   const resetLink = url.toString();
 
   if (!transporter) {
     if (env.NODE_ENV === "production") {
-      throw new Error("Password reset SMTP is not configured");
+      throw Object.assign(new Error("Password reset SMTP is not configured"), { code: "ESMTPUNCONFIGURED" });
     }
     console.log("\n[DEV] No SMTP config found. Password reset email not sent.");
     console.log(`To: ${to}`);
@@ -48,6 +53,6 @@ export async function sendPasswordResetEmail(
     html: `<h1>Reset your Northstar password</h1><p>Choose a new password securely.</p><p><a href="${htmlLink}">Reset password</a></p><p>This link expires in one hour and can only be used once. Only the latest reset link works.</p><p>If you didn't request this, ignore this email; your password has not changed.</p><p>After resetting, return to the Northstar extension and sign in.</p>`,
   });
   if (info.rejected?.length) {
-    throw new Error("Password reset recipient rejected by SMTP");
+    throw Object.assign(new Error("Password reset recipient rejected by SMTP"), { code: "ERECIPIENT" });
   }
 }
