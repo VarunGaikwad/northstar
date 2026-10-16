@@ -671,6 +671,7 @@ test("Notes HTTP security contract", async (t) => {
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("etag"), '"7"');
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
     assert.equal(response.headers.get("access-control-expose-headers"), "ETag");
     assert.deepEqual(await responseBody(response), {
       success: true,
@@ -678,6 +679,45 @@ test("Notes HTTP security contract", async (t) => {
     });
     assert.equal(mocks.noteFindFirst.mock.calls.length, 1);
     assert.equal(mocks.createSignedReadUrls.mock.calls.length, 0);
+  });
+
+  await t.test("consecutive saves return JSON without mutation ETags and stale saves still fail", async (t) => {
+    let stored = storedNote();
+    const updateMany = t.mock.fn((args: {
+      where: { version: number };
+      data: { content: string; version: { increment: number } };
+    }) => {
+      if (args.where.version !== stored.version) return Promise.resolve({ count: 0 });
+      stored = { ...stored, content: args.data.content, version: stored.version + args.data.version.increment };
+      return Promise.resolve({ count: 1 });
+    });
+    const tx = { note: { updateMany, findFirst: () => Promise.resolve(stored) } };
+    installDownstreamMocks(t, {
+      noteFindFirst: () => Promise.resolve(stored),
+      transaction: async (run: (client: typeof tx) => Promise<unknown>) => run(tx),
+    });
+    const authorization = accessAuthorization();
+    for (const expectedVersion of [7, 8]) {
+      const response = await fetch(`${baseUrl}/api/notes/${NOTE_ID}`, requestInit({
+        method: "PATCH", path: `/api/notes/${NOTE_ID}`,
+        body: { content: `Saved at version ${expectedVersion + 1}` },
+      }, authorization, { "If-Match": `"${expectedVersion}"` }));
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("etag"), null);
+      assert.equal(response.headers.get("cache-control"), "private, no-store");
+      const body = await responseBody(response) as { data: { content: string; version: number } };
+      assert.equal(body.data.version, expectedVersion + 1);
+      assert.equal(body.data.content, `Saved at version ${expectedVersion + 1}`);
+    }
+    const stale = await fetch(`${baseUrl}/api/notes/${NOTE_ID}`, requestInit({
+      method: "PATCH", path: `/api/notes/${NOTE_ID}`, body: { content: "Must not save" },
+    }, authorization, { "If-Match": '"7"' }));
+    assert.equal(stale.status, 412);
+    assert.deepEqual(await responseBody(stale), {
+      success: false, error: "Note version does not match If-Match",
+    });
+    assert.equal(stored.version, 9);
+    assert.equal(updateMany.mock.calls.length, 2);
   });
 
   await t.test("storage failures do not leak service keys or object paths", async (t) => {

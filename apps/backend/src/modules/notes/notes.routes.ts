@@ -1,8 +1,15 @@
-import { Router } from "express";
+import express from "express";
 import { authenticate } from "../../middleware/auth";
 import * as controller from "./notes.controller";
 
-const router = Router();
+// Isolate ETag settings to notes; mutation responses must not be re-evaluated
+// against the request's old If-Match version by the hosting proxy.
+const router = express();
+router.disable("etag");
+router.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  next();
+});
 
 router.use(authenticate);
 

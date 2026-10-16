@@ -33,7 +33,6 @@ function getExpectedVersion(req: Request): number {
 }
 
 function sendNote(res: Response, note: NoteResponse, statusCode = 200): void {
-  res.setHeader("ETag", `"${note.version}"`);
   res.status(statusCode).json({ success: true, data: note });
 }
 
@@ -54,6 +53,7 @@ export async function listNotes(req: Request, res: Response): Promise<void> {
 export async function getNote(req: Request, res: Response): Promise<void> {
   const userId = requireUserId(req);
   const note = await notesService.getNote(userId, getNoteId(req));
+  res.setHeader("ETag", `"${note.version}"`);
   sendNote(res, note);
 }
 
