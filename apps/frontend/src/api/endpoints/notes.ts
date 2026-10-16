@@ -45,7 +45,8 @@ function imagePath(noteId: string, imageId: string): string {
 }
 
 function versionHeaders(version: number): HeadersInit {
-  return { "If-Match": `"${version}"` };
+  // Avoid hosting proxies interpreting application version checks as HTTP preconditions.
+  return { "X-Note-Version": `"${version}"` };
 }
 
 function noteRequestOptions(version?: number) {

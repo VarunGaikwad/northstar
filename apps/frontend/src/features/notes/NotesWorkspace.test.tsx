@@ -83,7 +83,7 @@ beforeEach(() => {
     }
     if (id === failId) return json({ success: false, error: "Changed elsewhere" }, 412);
     const target = notes.find((note) => note.id === id)!;
-    if (new Headers(options.headers).get("If-Match") !== `"${target.version}"`) {
+    if (new Headers(options.headers).get("X-Note-Version") !== `"${target.version}"`) {
       return json({ success: false, error: "Note version does not match If-Match" }, 412);
     }
     if (options.method === "PATCH") {
@@ -126,7 +126,7 @@ it("quick deletes without opening the editor and sends the note version", async 
   await waitForText("0 loaded");
   const [[url, options]] = deleteRequests();
   expect(url).toContain("/notes/note-one/trash");
-  expect(new Headers(options.headers).get("If-Match")).toBe('"1"');
+  expect(new Headers(options.headers).get("X-Note-Version")).toBe('"1"');
   expect(notes[0].trashedAt).not.toBeNull();
 });
 
@@ -144,7 +144,7 @@ it("refreshes a stale version after a delete conflict and requires an explicit r
 
   await click(button("Delete Changed in another tab"));
   await waitForText("0 loaded");
-  expect(new Headers(deleteRequests()[1][1].headers).get("If-Match")).toBe('"2"');
+  expect(new Headers(deleteRequests()[1][1].headers).get("X-Note-Version")).toBe('"2"');
 });
 
 it("flushes an open editor before quick deletion and uses the saved version", async () => {
@@ -162,7 +162,7 @@ it("flushes an open editor before quick deletion and uses the saved version", as
   await click(button("Delete Untitled note"));
   await waitForText("0 loaded");
   expect(notes[0].title).toBe("Unsaved draft");
-  expect(new Headers(deleteRequests()[0][1].headers).get("If-Match")).toBe('"2"');
+  expect(new Headers(deleteRequests()[0][1].headers).get("X-Note-Version")).toBe('"2"');
   expect(host.querySelector('[aria-label="Note title"]')).toBeNull();
 });
 
@@ -202,7 +202,7 @@ it("selects individual notes and all loaded notes, preserving failures for retry
   await waitForText("1 loaded");
   expect(deleteRequests()).toHaveLength(2);
   expect(host.querySelector<HTMLInputElement>('[aria-label="Select Second"]')?.checked).toBe(true);
-  expect(new Headers(deleteRequests()[1][1].headers).get("If-Match")).toBe('"4"');
+  expect(new Headers(deleteRequests()[1][1].headers).get("X-Note-Version")).toBe('"4"');
   failId = null;
   await click(button("Delete selected (1)"));
   await waitForText("0 loaded");

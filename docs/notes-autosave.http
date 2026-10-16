@@ -4,8 +4,10 @@
 # Run requests ONE AT A TIME, in order. Do not use "Run All".
 # This creates and edits a disposable note on production; it does not edit your existing note.
 # If a request fails, inspect its response before proceeding.
+# Deploy the backend with X-Note-Version support BEFORE running this version.
+# Do not add If-Match: hosting proxies can apply their own HTTP precondition checks.
 
-@baseUrl = https://northstar-wine-five.vercel.app/api
+@baseUrl = http://localhost:5000/api
 @accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbXJ6cjJidXUwMDAwaWtwcXg5eDFranAwIiwiZW1haWwiOiJnYWlrd2FkdmFydW4yM0BnbWFpbC5jb20iLCJyb2xlIjoiVVNFUiIsInNlc3Npb25JZCI6ImNtdmE4ZHFrODAwMDAwOGw2am1neWZ6bDgiLCJ0b2tlblR5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3OTIxMTI1NzIsImV4cCI6MTc5MjcxNzM3MiwiYXVkIjoibm9ydGhzdGFyLWFjY2VzcyIsImlzcyI6Im5vcnRoc3Rhci1hcGkifQ.gCybfeICGcMEM_a1y4HZVXIFUdCo65rFrSufql6TUUI
 @noteId = {{createTestNote.response.body.$.data.id}}
 
@@ -33,7 +35,7 @@ Cache-Control: no-cache
 PATCH {{baseUrl}}/notes/{{noteId}}
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
-If-Match: "{{beforePatch.response.body.$.data.version}}"
+X-Note-Version: "{{beforePatch.response.body.$.data.version}}"
 
 {
   "content": "After PATCH"
@@ -53,7 +55,7 @@ Cache-Control: no-cache
 PATCH {{baseUrl}}/notes/{{noteId}}
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
-If-Match: "{{beforePatch.response.body.$.data.version}}"
+X-Note-Version: "{{beforePatch.response.body.$.data.version}}"
 
 {
   "content": "THIS MUST NOT BE SAVED"
@@ -68,4 +70,4 @@ Cache-Control: no-cache
 ### 7. Optional cleanup: move ONLY the disposable note to Trash — expect 200.
 POST {{baseUrl}}/notes/{{noteId}}/trash
 Authorization: Bearer {{accessToken}}
-If-Match: "{{afterRejection.response.body.$.data.version}}"
+X-Note-Version: "{{afterRejection.response.body.$.data.version}}"

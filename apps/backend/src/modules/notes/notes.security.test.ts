@@ -606,7 +606,7 @@ test("Notes HTTP security contract", async (t) => {
         Origin: trustedOrigin,
         "Access-Control-Request-Method": "PATCH",
         "Access-Control-Request-Headers":
-          "authorization, content-type, if-match",
+          "authorization, content-type, if-match, x-note-version",
       },
     });
 
@@ -620,7 +620,7 @@ test("Notes HTTP security contract", async (t) => {
     );
     assert.deepEqual(
       allowedHeaders,
-      new Set(["content-type", "authorization", "if-match"]),
+      new Set(["content-type", "authorization", "if-match", "x-note-version"]),
     );
     const allowedMethods = new Set(
       (response.headers.get("access-control-allow-methods") ?? "")
@@ -681,7 +681,7 @@ test("Notes HTTP security contract", async (t) => {
     assert.equal(mocks.createSignedReadUrls.mock.calls.length, 0);
   });
 
-  await t.test("consecutive saves return JSON without mutation ETags and stale saves still fail", async (t) => {
+  await t.test("custom and legacy version headers allow saves while stale versions still fail", async (t) => {
     let stored = storedNote();
     const updateMany = t.mock.fn((args: {
       where: { version: number };
@@ -697,11 +697,11 @@ test("Notes HTTP security contract", async (t) => {
       transaction: async (run: (client: typeof tx) => Promise<unknown>) => run(tx),
     });
     const authorization = accessAuthorization();
-    for (const expectedVersion of [7, 8]) {
+    for (const expectedVersion of [7, 8, 9]) {
       const response = await fetch(`${baseUrl}/api/notes/${NOTE_ID}`, requestInit({
         method: "PATCH", path: `/api/notes/${NOTE_ID}`,
         body: { content: `Saved at version ${expectedVersion + 1}` },
-      }, authorization, { "If-Match": `"${expectedVersion}"` }));
+      }, authorization, { [expectedVersion === 8 ? "If-Match" : "X-Note-Version"]: `"${expectedVersion}"` }));
       assert.equal(response.status, 200);
       assert.equal(response.headers.get("etag"), null);
       assert.equal(response.headers.get("cache-control"), "private, no-store");
@@ -711,13 +711,33 @@ test("Notes HTTP security contract", async (t) => {
     }
     const stale = await fetch(`${baseUrl}/api/notes/${NOTE_ID}`, requestInit({
       method: "PATCH", path: `/api/notes/${NOTE_ID}`, body: { content: "Must not save" },
-    }, authorization, { "If-Match": '"7"' }));
+    }, authorization, { "X-Note-Version": '"7"' }));
     assert.equal(stale.status, 412);
     assert.deepEqual(await responseBody(stale), {
       success: false, error: "Note version does not match If-Match",
     });
-    assert.equal(stored.version, 9);
-    assert.equal(updateMany.mock.calls.length, 2);
+    assert.equal(stored.version, 10);
+    assert.equal(updateMany.mock.calls.length, 3);
+  });
+
+  await t.test("invalid or conflicting custom version headers fail before Notes I/O", async (t) => {
+    const mocks = installDownstreamMocks(t);
+    const headersToReject: Array<Record<string, string>> = [
+      { "X-Note-Version": "7" },
+      { "X-Note-Version": '"0"' },
+      { "X-Note-Version": 'W/"7"' },
+      { "X-Note-Version": '"7"', "If-Match": '"8"' },
+    ];
+    for (const headers of headersToReject) {
+      const response = await fetch(`${baseUrl}/api/notes/${NOTE_ID}`, requestInit({
+        method: "PATCH", path: `/api/notes/${NOTE_ID}`, body: { content: "Must not save" },
+      }, accessAuthorization(), headers));
+      assert.equal(response.status, 400);
+      const body = await responseBody(response) as { success: boolean; error: string };
+      assert.equal(body.success, false);
+      assert.match(body.error, /Invalid X-Note-Version header|Conflicting note version headers/);
+    }
+    assertNoDownstreamCalls(mocks);
   });
 
   await t.test("storage failures do not leak service keys or object paths", async (t) => {

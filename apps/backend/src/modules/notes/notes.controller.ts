@@ -29,7 +29,14 @@ function getImageId(req: Request): string {
 }
 
 function getExpectedVersion(req: Request): number {
-  return parseIfMatch(req.headers["if-match"]);
+  const appVersion = req.headers["x-note-version"];
+  if (appVersion === undefined) return parseIfMatch(req.headers["if-match"]);
+  const version = parseIfMatch(appVersion, "X-Note-Version");
+  const ifMatch = req.headers["if-match"];
+  if (ifMatch !== undefined && parseIfMatch(ifMatch) !== version) {
+    throw new ApiError("Conflicting note version headers", 400);
+  }
+  return version;
 }
 
 function sendNote(res: Response, note: NoteResponse, statusCode = 200): void {

@@ -46,7 +46,7 @@ app.use(
 
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 
-    allowedHeaders: ["Content-Type", "Authorization", "If-Match"],
+    allowedHeaders: ["Content-Type", "Authorization", "If-Match", "X-Note-Version"],
 
     exposedHeaders: ["ETag"],
 

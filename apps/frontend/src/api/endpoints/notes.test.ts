@@ -96,7 +96,7 @@ describe("notes API", () => {
     expect(queryClient.getQueryData(notesKeys.detail(user.id, note.id))).toBeUndefined();
   });
 
-  it("preserves If-Match when a versioned request is retried after refresh", async () => {
+  it("preserves X-Note-Version when a versioned request is retried after refresh", async () => {
     applyAuthData(authData("old-token"), false);
     const fetchMock = vi
       .fn()
@@ -118,11 +118,13 @@ describe("notes API", () => {
     expect(fetchMock.mock.calls[0][0]).toContain("/notes/note%2Fone");
     expect(firstRequest.method).toBe("PATCH");
     expect(firstRequest.credentials).toBe("include");
-    expect(new Headers(firstRequest.headers).get("If-Match")).toBe('"3"');
+    expect(new Headers(firstRequest.headers).get("X-Note-Version")).toBe('"3"');
+    expect(new Headers(firstRequest.headers).has("If-Match")).toBe(false);
     expect(new Headers(firstRequest.headers).get("Authorization")).toBe(
       "Bearer old-token",
     );
-    expect(new Headers(retriedRequest.headers).get("If-Match")).toBe('"3"');
+    expect(new Headers(retriedRequest.headers).get("X-Note-Version")).toBe('"3"');
+    expect(new Headers(retriedRequest.headers).has("If-Match")).toBe(false);
     expect(new Headers(retriedRequest.headers).get("Authorization")).toBe(
       "Bearer new-token",
     );
@@ -147,9 +149,9 @@ describe("notes API", () => {
     expect(putRequest.body).toBe(
       JSON.stringify({ imageIds: ["image-two", "image-one"] }),
     );
-    expect(new Headers(putRequest.headers).get("If-Match")).toBe('"4"');
+    expect(new Headers(putRequest.headers).get("X-Note-Version")).toBe('"4"');
     expect(deleteRequest.method).toBe("DELETE");
-    expect(new Headers(deleteRequest.headers).get("If-Match")).toBe('"5"');
+    expect(new Headers(deleteRequest.headers).get("X-Note-Version")).toBe('"5"');
   });
 
   it("uploads signed image bytes without Northstar credentials", async () => {
