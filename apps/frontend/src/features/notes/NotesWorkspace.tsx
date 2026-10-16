@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  cacheNote,
   messageForNotesError,
   invalidateNoteLists,
   notesApi,
@@ -32,6 +33,7 @@ import {
 } from "../../api/endpoints/notes";
 import type { Note, NoteView } from "../../api/types";
 import { currentUserId } from "../../api/persistentCache";
+import { HttpError } from "../../api/client";
 import { queryClient } from "../../api/queryClient";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useAuth } from "../../auth/useAuth";
@@ -396,7 +398,17 @@ export function NotesWorkspace({ onClose }: NotesWorkspaceProps) {
               return next;
             });
           } catch (error) {
-            failures.push(messageForNotesError(error));
+            if (error instanceof HttpError && error.status === 412) {
+              try {
+                const refreshed = await notesApi.get(target.id);
+                cacheNote(refreshed, ownerUserId);
+                failures.push("This note changed elsewhere. Review the updated note and delete again.");
+              } catch (refreshError) {
+                failures.push(`Could not refresh the changed note. ${messageForNotesError(refreshError)}`);
+              }
+            } else {
+              failures.push(messageForNotesError(error));
+            }
           }
         }
         if (failures.length) {

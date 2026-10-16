@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { applyAuthData, clearAuthState } from "../../auth/session";
 import { queryClient } from "../../api/queryClient";
+import { notesKeys } from "../../api/endpoints/notes";
 import type { Note } from "../../api/types";
 import { NotesWorkspace } from "./NotesWorkspace";
 
@@ -82,6 +83,9 @@ beforeEach(() => {
     }
     if (id === failId) return json({ success: false, error: "Changed elsewhere" }, 412);
     const target = notes.find((note) => note.id === id)!;
+    if (new Headers(options.headers).get("If-Match") !== `"${target.version}"`) {
+      return json({ success: false, error: "Note version does not match If-Match" }, 412);
+    }
     if (options.method === "PATCH") {
       const updated = { ...target, ...JSON.parse(options.body as string), version: target.version + 1 };
       notes = notes.map((note) => note.id === id ? updated : note);
@@ -124,6 +128,23 @@ it("quick deletes without opening the editor and sends the note version", async 
   expect(url).toContain("/notes/note-one/trash");
   expect(new Headers(options.headers).get("If-Match")).toBe('"1"');
   expect(notes[0].trashedAt).not.toBeNull();
+});
+
+it("refreshes a stale version after a delete conflict and requires an explicit retry", async () => {
+  await render();
+  queryClient.setQueryData(notesKeys.detail("user-one", blankNote.id), blankNote);
+  notes = [{ ...blankNote, title: "Changed in another tab", version: 2 }];
+
+  await click(button("Delete Untitled note"));
+  await waitForText("Review the updated note and delete again.");
+  await waitForText("Changed in another tab");
+  expect(deleteRequests()).toHaveLength(1);
+  expect(notes[0].trashedAt).toBeNull();
+  expect(queryClient.getQueryData<Note>(notesKeys.detail("user-one", blankNote.id))?.version).toBe(2);
+
+  await click(button("Delete Changed in another tab"));
+  await waitForText("0 loaded");
+  expect(new Headers(deleteRequests()[1][1].headers).get("If-Match")).toBe('"2"');
 });
 
 it("flushes an open editor before quick deletion and uses the saved version", async () => {
