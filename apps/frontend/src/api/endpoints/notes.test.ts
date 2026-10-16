@@ -3,11 +3,12 @@ import { applyAuthData, clearAuthState } from "../../auth/session";
 import type {
   AuthResponse,
   Note,
+  NotePage,
   NoteUploadIntent,
   User,
 } from "../types";
 import { queryClient } from "../queryClient";
-import { cacheNote, notesApi, notesKeys } from "./notes";
+import { cacheNote, notesApi, notesKeys, removeCachedNote } from "./notes";
 
 const user: User = {
   id: "user-one",
@@ -66,6 +67,35 @@ afterEach(() => {
 });
 
 describe("notes API", () => {
+  it("reads the API notes collection and updates and removes cached list entries", async () => {
+    applyAuthData(authData("token"), false);
+    const blankNote = { ...note, title: "", content: "" };
+    const otherNote = { ...note, id: "note-two" };
+    const page = { notes: [blankNote, otherNote], nextCursor: "next-page" };
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ success: true, data: page }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await notesApi.list({ view: "active", limit: 30 });
+    expect(result).toEqual(page);
+    expect(fetchMock.mock.calls[0][0]).toContain("/notes?view=active&limit=30");
+    const key = notesKeys.list(user.id, "active", 30);
+    queryClient.setQueryData(key, { pages: [result], pageParams: [undefined] });
+
+    const updated = { ...blankNote, title: "Saved title", version: 5 };
+    cacheNote(updated, user.id);
+    expect(queryClient.getQueryData<{ pages: NotePage[] }>(key)?.pages).toEqual([
+      { ...page, notes: [updated, otherNote] },
+    ]);
+
+    removeCachedNote(note.id, user.id);
+    expect(queryClient.getQueryData<{ pages: NotePage[] }>(key)?.pages).toEqual([
+      { ...page, notes: [otherNote] },
+    ]);
+    expect(queryClient.getQueryData(notesKeys.detail(user.id, note.id))).toBeUndefined();
+  });
+
   it("preserves If-Match when a versioned request is retried after refresh", async () => {
     applyAuthData(authData("old-token"), false);
     const fetchMock = vi

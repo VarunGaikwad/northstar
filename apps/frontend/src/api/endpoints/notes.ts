@@ -186,7 +186,7 @@ function updateNoteInLists(userId: string, note: Note): void {
         ...data,
         pages: data.pages.map((page) => ({
           ...page,
-          items: page.items.map((item) => (item.id === note.id ? note : item)),
+          notes: page.notes.map((item) => (item.id === note.id ? note : item)),
         })),
       };
     },
@@ -224,7 +224,7 @@ export function removeCachedNote(
         ...data,
         pages: data.pages.map((page) => ({
           ...page,
-          items: page.items.filter((item) => item.id !== noteId),
+          notes: page.notes.filter((item) => item.id !== noteId),
         })),
       };
     },

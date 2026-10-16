@@ -337,7 +337,7 @@ export interface Note {
 }
 
 export interface NotePage {
-  items: Note[];
+  notes: Note[];
   nextCursor: string | null;
 }
 

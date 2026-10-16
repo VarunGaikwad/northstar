@@ -270,7 +270,7 @@ export function NotesWorkspace({ onClose }: NotesWorkspaceProps) {
   const navigationLockedRef = useRef(false);
   const notesQuery = useNotes(view);
   const createNote = useCreateNote();
-  const notes = notesQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const notes = notesQuery.data?.pages.flatMap((page) => page.notes) ?? [];
   const activeOption = VIEW_OPTIONS.find((option) => option.value === view)!;
   const ownerUserId = user?.id ?? "anonymous";
 
