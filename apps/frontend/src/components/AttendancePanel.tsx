@@ -233,6 +233,15 @@ export function AttendancePanel() {
         Timezone: {DEFAULT_TZ}
       </div>
 
+      <a
+        href="https://jp.hondaweb.com/g_jik_p401prd1/jkc-web/application/html/SIDPC051/SIDPC051/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mb-4 shrink-0 text-sm font-semibold text-indigo-300 hover:text-indigo-200 hover:underline"
+      >
+        Honda clock in / out ↗
+      </a>
+
       {view === "today" && (
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
           {today.isLoading && (
