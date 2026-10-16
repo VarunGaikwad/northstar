@@ -11,7 +11,7 @@ type CacheEntry = {
 
 let cache: CacheEntry | null = null;
 
-const DEFAULT_BACKGROUND_QUERY = "Japan";
+const DEFAULT_BACKGROUND_QUERY = "Japan famous tourist attractions";
 const RANDOM_PHOTO_COUNT = 30;
 
 function getUtcDateKey(): string {
