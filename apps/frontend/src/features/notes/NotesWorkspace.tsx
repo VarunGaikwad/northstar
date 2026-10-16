@@ -22,11 +22,18 @@ import {
 } from "lucide-react";
 import {
   messageForNotesError,
+  invalidateNoteLists,
+  notesApi,
+  notesKeys,
+  removeCachedNote,
   useCreateNote,
   useNote,
   useNotes,
 } from "../../api/endpoints/notes";
 import type { Note, NoteView } from "../../api/types";
+import { currentUserId } from "../../api/persistentCache";
+import { queryClient } from "../../api/queryClient";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useAuth } from "../../auth/useAuth";
 import { Badge, Button, IconButton, Skeleton } from "../../components/ui";
 import { NoteEditor, type NoteEditorHandle } from "./NoteEditor";
@@ -73,53 +80,87 @@ function NoteCard({
   note,
   selected,
   onSelect,
+  selecting,
+  checked,
+  disabled,
+  onToggle,
+  onDelete,
 }: {
   note: Note;
   selected: boolean;
   onSelect: () => void;
+  selecting: boolean;
+  checked: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
 }) {
   const color = noteColorOption(note.color);
 
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onSelect}
-      className={`group w-full rounded-2xl border p-4 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-        color.surface
-      } ${
-        selected
-          ? "border-indigo-400/70 shadow-[0_0_0_1px_rgba(129,140,248,0.25),0_12px_28px_rgba(0,0,0,0.25)]"
-          : "hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.09]"
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-white/95">
-              {note.title || "Untitled note"}
-            </h3>
-            {note.isPinned && (
-              <Pin className="h-3.5 w-3.5 shrink-0 fill-indigo-300/20 text-indigo-300" />
-            )}
-          </div>
-          <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-white/50">
-            {note.content || "No content yet"}
-          </p>
-        </div>
-        <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${color.swatch}`} />
-      </div>
-
-      <div className="mt-4 flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.12em] text-white/35">
-        <span>{noteDateFormatter.format(new Date(note.updatedAt))}</span>
-        {note.images.length > 0 && (
-          <span className="flex items-center gap-1">
-            <Images className="h-3 w-3" />
-            {note.images.length}
-          </span>
+    <div className="relative">
+      <div className="absolute right-2 top-2 z-10">
+        {selecting ? (
+          <input
+            type="checkbox"
+            aria-label={`Select ${note.title || "Untitled note"}`}
+            checked={checked}
+            disabled={disabled}
+            onChange={onToggle}
+            className="h-5 w-5 cursor-pointer accent-indigo-500"
+          />
+        ) : (
+          <IconButton
+            icon={<Trash2 className="h-3.5 w-3.5" />}
+            label={`${note.trashedAt ? "Permanently delete" : "Delete"} ${note.title || "Untitled note"}`}
+            variant="danger"
+            size="sm"
+            disabled={disabled}
+            onClick={onDelete}
+          />
         )}
       </div>
-    </button>
+      <button
+        type="button"
+        aria-pressed={selecting ? checked : selected}
+        disabled={disabled}
+        onClick={selecting ? onToggle : onSelect}
+        className={`group w-full rounded-2xl border p-4 pr-12 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+          color.surface
+        } ${
+          (selecting ? checked : selected)
+            ? "border-indigo-400/70 shadow-[0_0_0_1px_rgba(129,140,248,0.25),0_12px_28px_rgba(0,0,0,0.25)]"
+            : "hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.09]"
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="truncate text-sm font-semibold text-white/95">
+                {note.title || "Untitled note"}
+              </h3>
+              {note.isPinned && (
+                <Pin className="h-3.5 w-3.5 shrink-0 fill-indigo-300/20 text-indigo-300" />
+              )}
+            </div>
+            <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-white/50">
+              {note.content || "No content yet"}
+            </p>
+          </div>
+          <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${color.swatch}`} />
+        </div>
+
+        <div className="mt-4 flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.12em] text-white/35">
+          <span>{noteDateFormatter.format(new Date(note.updatedAt))}</span>
+          {note.images.length > 0 && (
+            <span className="flex items-center gap-1">
+              <Images className="h-3 w-3" />
+              {note.images.length}
+            </span>
+          )}
+        </div>
+      </button>
+    </div>
   );
 }
 
@@ -265,6 +306,10 @@ export function NotesWorkspace({ onClose }: NotesWorkspaceProps) {
   const [view, setView] = useState<NoteView>("active");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [deleteTargets, setDeleteTargets] = useState<Note[] | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<NoteEditorHandle>(null);
   const navigationLockedRef = useRef(false);
@@ -305,7 +350,62 @@ export function NotesWorkspace({ onClose }: NotesWorkspaceProps) {
         setView(nextView);
         setSelectedId(null);
         setCreateError(null);
+        setSelecting(false);
+        setCheckedIds(new Set());
       });
+    });
+  }
+
+  function toggleChecked(noteId: string): void {
+    setCheckedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(noteId)) next.delete(noteId);
+      else next.add(noteId);
+      return next;
+    });
+  }
+
+  function requestDelete(targets: Note[]): void {
+    if (!targets.length || deleting) return;
+    if (view === "trash") setDeleteTargets(targets);
+    else void deleteNotes(targets);
+  }
+
+  async function deleteNotes(targets: Note[]): Promise<void> {
+    await requestNavigation(async () => {
+      setDeleting(true);
+      setCreateError(null);
+      // Unmount the editor after flushing its draft so autosave cannot race deletion.
+      setSelectedId(null);
+      const failures: string[] = [];
+      try {
+        for (const target of targets) {
+          if (currentUserId() !== ownerUserId) break;
+          const cached = queryClient.getQueryData<Note>(notesKeys.detail(ownerUserId, target.id));
+          const latest = cached && cached.version > target.version ? cached : target;
+          try {
+            if (view === "trash") {
+              await notesApi.permanentlyDelete(latest.id, latest.version);
+            } else {
+              await notesApi.trash(latest.id, latest.version);
+            }
+            removeCachedNote(latest.id, ownerUserId);
+            setCheckedIds((previous) => {
+              const next = new Set(previous);
+              next.delete(latest.id);
+              return next;
+            });
+          } catch (error) {
+            failures.push(messageForNotesError(error));
+          }
+        }
+        if (failures.length) {
+          invalidateNoteLists(ownerUserId);
+          setCreateError(`${failures.length} note(s) could not be deleted. ${failures[0]}`);
+        }
+      } finally {
+        setDeleting(false);
+      }
     });
   }
 
@@ -317,6 +417,8 @@ export function NotesWorkspace({ onClose }: NotesWorkspaceProps) {
         startTransition(() => {
           setView("active");
           setSelectedId(created.id);
+          setSelecting(false);
+          setCheckedIds(new Set());
         });
       } catch (error) {
         setCreateError(messageForNotesError(error));
@@ -385,6 +487,7 @@ export function NotesWorkspace({ onClose }: NotesWorkspaceProps) {
             variant="primary"
             size="sm"
             isLoading={createNote.isPending}
+            disabled={deleting}
             leftIcon={<Plus className="h-4 w-4" />}
             onClick={() => void handleCreate()}
           >
@@ -400,7 +503,7 @@ export function NotesWorkspace({ onClose }: NotesWorkspaceProps) {
           />
         </header>
 
-        <div className="flex min-h-0 flex-1">
+        <fieldset disabled={deleting} className="flex min-h-0 min-w-0 flex-1 border-0 p-0">
           <aside className="hidden w-52 shrink-0 flex-col border-r border-white/10 bg-black/10 p-4 lg:flex">
             <ViewSwitcher view={view} onChange={changeView} />
             <div className="mt-auto rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.07] p-3">
@@ -456,7 +559,34 @@ export function NotesWorkspace({ onClose }: NotesWorkspaceProps) {
               </div>
             )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+            <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
+              <Button variant="ghost" size="sm" onClick={() => {
+                void requestNavigation(() => {
+                  setSelectedId(null);
+                  setSelecting(!selecting);
+                  setCheckedIds(new Set());
+                });
+              }}>
+                {selecting ? "Cancel selection" : "Select notes"}
+              </Button>
+              {selecting && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    const allChecked = notes.length > 0 && notes.every((note) => checkedIds.has(note.id));
+                    setCheckedIds(allChecked ? new Set() : new Set(notes.map((note) => note.id)));
+                  }}>
+                    {notes.length > 0 && notes.every((note) => checkedIds.has(note.id)) ? "Deselect all" : "Select all loaded"}
+                  </Button>
+                  <Button variant="danger" size="sm" disabled={!checkedIds.size} isLoading={deleting}
+                    leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                    onClick={() => requestDelete(notes.filter((note) => checkedIds.has(note.id)))}>
+                    Delete selected ({notes.filter((note) => checkedIds.has(note.id)).length})
+                  </Button>
+                </>
+              )}
+            </div>
+
+            <div aria-busy={deleting} className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
               {notesQuery.isLoading && (
                 <div className="space-y-3">
                   <Skeleton variant="rectangular" className="h-32" />
@@ -501,6 +631,11 @@ export function NotesWorkspace({ onClose }: NotesWorkspaceProps) {
                     key={note.id}
                     note={note}
                     selected={selectedId === note.id}
+                    selecting={selecting}
+                    checked={checkedIds.has(note.id)}
+                    disabled={deleting}
+                    onToggle={() => toggleChecked(note.id)}
+                    onDelete={() => requestDelete([note])}
                     onSelect={() => {
                       if (selectedId !== note.id) {
                         void requestNavigation(() => setSelectedId(note.id));
@@ -558,8 +693,18 @@ export function NotesWorkspace({ onClose }: NotesWorkspaceProps) {
               </div>
             )}
           </main>
-        </div>
+        </fieldset>
       </div>
+      <ConfirmDialog
+        open={deleteTargets !== null}
+        message={`Permanently delete ${deleteTargets?.length ?? 0} note(s) and their images? This cannot be undone.`}
+        onCancel={() => setDeleteTargets(null)}
+        onConfirm={() => {
+          const targets = deleteTargets;
+          setDeleteTargets(null);
+          if (targets) void deleteNotes(targets);
+        }}
+      />
     </div>
   );
 }
