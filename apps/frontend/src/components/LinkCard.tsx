@@ -15,7 +15,7 @@ export function LinkCard({ link, onEdit, onDelete, viewMode = "grid" }: LinkCard
   const initial = (link.title || "?").trim().charAt(0).toUpperCase();
   const primaryIcon = faviconUrl(link.url);
   const secondaryIcon = fallbackFaviconUrl(link.url);
-  
+
   const [iconSrc, setIconSrc] = useState<string | null>(primaryIcon);
   const [iconFailed, setIconFailed] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -42,7 +42,7 @@ export function LinkCard({ link, onEdit, onDelete, viewMode = "grid" }: LinkCard
     return (
       <a
         href={link.url}
-        target="_blank"
+        target="_self"
         rel="noopener noreferrer"
         className="group relative flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.05] border border-white/10 text-white transition-all duration-200 hover:bg-white/[0.12] hover:border-white/20 hover:shadow-lg"
       >
@@ -111,7 +111,7 @@ export function LinkCard({ link, onEdit, onDelete, viewMode = "grid" }: LinkCard
   return (
     <a
       href={link.url}
-      target="_blank"
+      target="_self"
       rel="noopener noreferrer"
       className="group relative flex flex-col items-center text-center p-4 rounded-2xl bg-white/[0.06] border border-white/12 backdrop-blur-xl text-white transition-all duration-200 hover:-translate-y-1 hover:bg-white/[0.14] hover:border-indigo-400/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.4),0_0_24px_rgba(129,140,248,0.2)]"
     >

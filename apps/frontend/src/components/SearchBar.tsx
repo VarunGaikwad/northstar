@@ -297,7 +297,7 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
   };
 
   const openLink = (url: string) => {
-    window.open(url, "_blank", "noopener");
+    window.open(url, "_self", "noopener");
     setQuery("");
     setSelectedIndex(-1);
     setIsFocused(false);
@@ -313,7 +313,7 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
       openLink(matches[selectedIndex].url);
     } else {
       // Perform normal search engine search
-      window.open(engine.url + encodeURIComponent(q), "_blank", "noopener");
+      window.open(engine.url + encodeURIComponent(q), "_self", "noopener");
       setQuery("");
       setSelectedIndex(-1);
       setIsFocused(false);
@@ -436,7 +436,7 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
               <button
                 type="button"
                 onClick={() => {
-                  window.open(engine.url + encodeURIComponent(query.trim()), "_blank", "noopener");
+                  window.open(engine.url + encodeURIComponent(query.trim()), "_self", "noopener");
                   setQuery("");
                   setIsFocused(false);
                 }}
@@ -477,5 +477,3 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
     </div>
   );
 }
-
-

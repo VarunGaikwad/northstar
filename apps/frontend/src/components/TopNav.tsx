@@ -52,7 +52,7 @@ export function TopNav({
 
         <a
           href="https://www.google.com"
-          target="_blank"
+          target="_self"
           rel="noopener noreferrer"
           aria-label="Open Google"
           title="Google"
