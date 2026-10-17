@@ -45,7 +45,8 @@ function imagePath(noteId: string, imageId: string): string {
 }
 
 function versionHeaders(version: number): HeadersInit {
-  return { "If-Match": `"${version}"` };
+  // Avoid hosting proxies interpreting application version checks as HTTP preconditions.
+  return { "X-Note-Version": `"${version}"` };
 }
 
 function noteRequestOptions(version?: number) {
@@ -186,7 +187,7 @@ function updateNoteInLists(userId: string, note: Note): void {
         ...data,
         pages: data.pages.map((page) => ({
           ...page,
-          items: page.items.map((item) => (item.id === note.id ? note : item)),
+          notes: page.notes.map((item) => (item.id === note.id ? note : item)),
         })),
       };
     },
@@ -224,7 +225,7 @@ export function removeCachedNote(
         ...data,
         pages: data.pages.map((page) => ({
           ...page,
-          items: page.items.filter((item) => item.id !== noteId),
+          notes: page.notes.filter((item) => item.id !== noteId),
         })),
       };
     },

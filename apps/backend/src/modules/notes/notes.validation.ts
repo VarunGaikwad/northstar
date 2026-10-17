@@ -386,20 +386,20 @@ export function parseListNotesQuery(value: unknown): ParsedListNotesQuery {
   }
 }
 
-export function parseIfMatch(value: unknown): number {
+export function parseIfMatch(value: unknown, headerName = "If-Match"): number {
   if (value === undefined || value === null) {
-    throw new ApiError("If-Match header is required", 428);
+    throw new ApiError(`${headerName} header is required`, 428);
   }
   if (typeof value !== "string") {
-    throw new ApiError("Invalid If-Match header", 400);
+    throw new ApiError(`Invalid ${headerName} header`, 400);
   }
 
   const match = IF_MATCH_PATTERN.exec(value);
-  if (!match) throw new ApiError("Invalid If-Match header", 400);
+  if (!match) throw new ApiError(`Invalid ${headerName} header`, 400);
 
   const version = Number(match[1]);
   if (!Number.isSafeInteger(version)) {
-    throw new ApiError("Invalid If-Match header", 400);
+    throw new ApiError(`Invalid ${headerName} header`, 400);
   }
   return version;
 }

@@ -29,11 +29,17 @@ function getImageId(req: Request): string {
 }
 
 function getExpectedVersion(req: Request): number {
-  return parseIfMatch(req.headers["if-match"]);
+  const appVersion = req.headers["x-note-version"];
+  if (appVersion === undefined) return parseIfMatch(req.headers["if-match"]);
+  const version = parseIfMatch(appVersion, "X-Note-Version");
+  const ifMatch = req.headers["if-match"];
+  if (ifMatch !== undefined && parseIfMatch(ifMatch) !== version) {
+    throw new ApiError("Conflicting note version headers", 400);
+  }
+  return version;
 }
 
 function sendNote(res: Response, note: NoteResponse, statusCode = 200): void {
-  res.setHeader("ETag", `"${note.version}"`);
   res.status(statusCode).json({ success: true, data: note });
 }
 
@@ -54,6 +60,7 @@ export async function listNotes(req: Request, res: Response): Promise<void> {
 export async function getNote(req: Request, res: Response): Promise<void> {
   const userId = requireUserId(req);
   const note = await notesService.getNote(userId, getNoteId(req));
+  res.setHeader("ETag", `"${note.version}"`);
   sendNote(res, note);
 }
 

@@ -1,0 +1,73 @@
+# Run with VS Code REST Client or a compatible HTTP client.
+# Set accessToken locally to your current Bearer access token (without "Bearer ").
+# Never commit a real token or share a copied authenticated request.
+# Run requests ONE AT A TIME, in order. Do not use "Run All".
+# This creates and edits a disposable note on production; it does not edit your existing note.
+# If a request fails, inspect its response before proceeding.
+# Deploy the backend with X-Note-Version support BEFORE running this version.
+# Do not add If-Match: hosting proxies can apply their own HTTP precondition checks.
+
+@baseUrl = http://localhost:5000/api
+@accessToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbXJ6cjJidXUwMDAwaWtwcXg5eDFranAwIiwiZW1haWwiOiJnYWlrd2FkdmFydW4yM0BnbWFpbC5jb20iLCJyb2xlIjoiVVNFUiIsInNlc3Npb25JZCI6ImNtdmE4ZHFrODAwMDAwOGw2am1neWZ6bDgiLCJ0b2tlblR5cGUiOiJhY2Nlc3MiLCJpYXQiOjE3OTIxMTI1NzIsImV4cCI6MTc5MjcxNzM3MiwiYXVkIjoibm9ydGhzdGFyLWFjY2VzcyIsImlzcyI6Im5vcnRoc3Rhci1hcGkifQ.gCybfeICGcMEM_a1y4HZVXIFUdCo65rFrSufql6TUUI
+@noteId = {{createTestNote.response.body.$.data.id}}
+
+### 1. Create disposable note — expect 201 and data.version = 1.
+# @name createTestNote
+POST {{baseUrl}}/notes
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "Autosave HTTP test — disposable",
+  "content": "Before PATCH"
+}
+
+### 2. Read current note — expect 200. Record version, ETag, and cache headers.
+# Do not rerun this request between steps 3 and 5: step 5 needs its OLD version.
+# @name beforePatch
+GET {{baseUrl}}/notes/{{noteId}}
+Authorization: Bearer {{accessToken}}
+Cache-Control: no-cache
+
+### 3. PATCH with the version from step 2 — expect 200, NOT 412.
+# Expect data.content = "After PATCH" and data.version increased by exactly 1.
+# @name firstPatch
+PATCH {{baseUrl}}/notes/{{noteId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+X-Note-Version: "{{beforePatch.response.body.$.data.version}}"
+
+{
+  "content": "After PATCH"
+}
+
+### 4. Read after PATCH — expect the content/version returned by step 3.
+# If step 3 returned 412 but this GET shows "After PATCH" and an increased version,
+# save both responses, timestamps, ETag, and x-vercel-id for investigation.
+# @name afterPatch
+GET {{baseUrl}}/notes/{{noteId}}
+Authorization: Bearer {{accessToken}}
+Cache-Control: no-cache
+
+### 5. Deliberately replay OLD version — expect 412, with NO database change.
+# Only run after verifying step 3 SUCCEEDED and step 4 shows the new version.
+# @name stalePatch
+PATCH {{baseUrl}}/notes/{{noteId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+X-Note-Version: "{{beforePatch.response.body.$.data.version}}"
+
+{
+  "content": "THIS MUST NOT BE SAVED"
+}
+
+### 6. Verify rejection did not change anything — expect same data as step 4.
+# @name afterRejection
+GET {{baseUrl}}/notes/{{noteId}}
+Authorization: Bearer {{accessToken}}
+Cache-Control: no-cache
+
+### 7. Optional cleanup: move ONLY the disposable note to Trash — expect 200.
+POST {{baseUrl}}/notes/{{noteId}}/trash
+Authorization: Bearer {{accessToken}}
+X-Note-Version: "{{afterRejection.response.body.$.data.version}}"

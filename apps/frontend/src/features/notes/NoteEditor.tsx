@@ -430,11 +430,30 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(
           <textarea
             value={controller.draft.content}
             onChange={(event) => controller.setContent(event.target.value)}
+            onPaste={(event) => {
+              const files = Array.from(event.clipboardData.items)
+                .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+                .map((item) => item.getAsFile())
+                .filter((file): file is File => file !== null);
+              if (files.length === 0) return;
+              event.preventDefault();
+              const available = Math.max(0, 10 - images.length);
+              void (async () => {
+                for (const file of files.slice(0, available)) {
+                  try {
+                    await controller.uploadImage(file);
+                  } catch {
+                    break;
+                  }
+                }
+              })();
+            }}
+            aria-describedby="note-image-paste-hint"
             onBlur={() => void controller.flush().catch(() => undefined)}
             disabled={!canEdit}
             aria-label="Note content"
             placeholder="Start writing..."
-            className="mt-4 min-h-[240px] w-full flex-1 resize-none border-none bg-transparent text-[15px] leading-7 text-white/85 outline-none placeholder:text-white/25 disabled:cursor-default disabled:opacity-80"
+            className="mt-4 min-h-0 w-full flex-1 resize-none border-none bg-transparent text-[15px] leading-7 text-white/85 outline-none placeholder:text-white/25 disabled:cursor-default disabled:opacity-80"
           />
           <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-[10px] font-medium uppercase tracking-[0.14em] text-white/35">
             <span>{controller.draft.content.length.toLocaleString()} characters</span>
@@ -449,7 +468,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(
             <div className="flex items-center gap-2">
               <Images className="h-4 w-4 text-indigo-300" />
               <h3 className="text-sm font-semibold text-white/85">Images</h3>
-              <span className="text-[11px] text-white/35">{images.length}/10</span>
+              <span id="note-image-paste-hint" className="text-[11px] text-white/35">
+                {images.length}/10 · Paste an image with Ctrl+V
+              </span>
             </div>
 
             {!isTrashed && (
