@@ -6,7 +6,7 @@
   "author": "Varun Gaikwad",
   "permissions": ["tabs", "storage", "activeTab", "geolocation"],
   "host_permissions": [
-    "https://northstar-backend-five.vercel.app/*",
+    "https://northstar-wine-five.vercel.app/*",
     "https://*.supabase.co/*"
   ],
   "chrome_url_overrides": {
