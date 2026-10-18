@@ -120,11 +120,12 @@ test("handler sends a non-cacheable HTML document with isolated nonce CSP and ne
   assert.ok(html.includes(`<style nonce="${nonce}">`));
   assert.equal(response.headers.get("content-security-policy"), [
     "default-src 'none'", `script-src 'nonce-${nonce}'`, `style-src 'nonce-${nonce}'`,
-    "connect-src 'self'", "form-action 'self'", "base-uri 'none'", "frame-ancestors 'none'",
+    "connect-src 'self'", "img-src 'self'", "form-action 'self'", "base-uri 'none'", "frame-ancestors 'none'",
   ].join("; "));
   assert.ok(!html.includes(malicious));
   assert.ok(!html.includes("evil.example"));
-  assert.doesNotMatch(html, /<(?:script|link|img)[^>]+(?:src|href)=/);
+  const assets = [...html.matchAll(/<(?:script|link|img)[^>]+(?:src|href)="([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(assets, ["/favicon.png", "/favicon.png", "/favicon.png"]);
   assert.match(html, /prefers-reduced-motion/);
   assert.match(html, /:focus-visible/);
   assert.match(html, /<label for="password">/);

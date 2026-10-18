@@ -124,7 +124,6 @@ const style = `
   aside { padding: 40px 32px; background: linear-gradient(140deg, #6366f12b, #8b5cf614, transparent); border-right: 1px solid #ffffff1a; display: flex; flex-direction: column; justify-content: space-between; gap: 48px; }
   .brand { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 750; letter-spacing: -.5px; }
   a { color: #c7d2fe; }
-  .compass { color: #a5b4fc; font-size: 32px; line-height: 1; }
   .tagline { font-size: 28px; font-weight: 750; line-height: 1.25; letter-spacing: -.6px; }
   .muted, .intro, .hint, footer { color: #c4cadb; line-height: 1.6; font-size: 14px; }
   .security { color: #a7f3d0; font-size: 13px; border-top: 1px solid #ffffff1a; padding-top: 20px; }
@@ -175,6 +174,7 @@ export function resetPasswordPage(_req: Request, res: Response): void {
       `script-src 'nonce-${nonce}'`,
       `style-src 'nonce-${nonce}'`,
       "connect-src 'self'",
+      "img-src 'self'",
       "form-action 'self'",
       "base-uri 'none'",
       "frame-ancestors 'none'",
@@ -187,6 +187,8 @@ export function resetPasswordPage(_req: Request, res: Response): void {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>Reset your password · Northstar</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <meta name="theme-color" content="#0b1020">
   <script nonce="${nonce}">${script}</script>
   <style nonce="${nonce}">${style}</style>
 </head>
@@ -194,14 +196,14 @@ export function resetPasswordPage(_req: Request, res: Response): void {
   <main>
     <aside aria-label="Northstar">
       <div>
-        <div class="brand"><span class="compass" aria-hidden="true">✧</span> Northstar</div>
+        <div class="brand"><img src="/favicon.png" width="32" height="32" alt=""> Northstar</div>
         <p class="tagline">Your Personal<br>Command Center.</p>
         <p class="muted">A fresh start for your daily browser workflow.</p>
       </div>
       <div class="security">A secure reset. A new direction.</div>
     </aside>
     <section class="content" aria-labelledby="heading">
-      <div class="brand mobile-brand"><span class="compass" aria-hidden="true">✧</span> Northstar</div>
+      <div class="brand mobile-brand"><img src="/favicon.png" width="32" height="32" alt=""> Northstar</div>
       <p class="eyebrow">Account recovery</p>
       <h1 id="heading">Set a new password</h1>
       <p class="intro" id="intro">Choose a strong password to get back to your Northstar.</p>

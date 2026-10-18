@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type Request, type Response } from "express";
@@ -10,6 +11,7 @@ import authRoutes from "./modules/auth/auth.routes";
 import { resetPasswordPage } from "./modules/auth/reset-page";
 import { forgotPasswordPage } from "./modules/auth/forgot-page";
 import { lrtPage } from "./modules/lrt/lrt-page";
+import { homePage } from "./modules/home/home-page";
 import backgroundRoutes from "./modules/background/background.routes";
 import favlinkRoutes from "./modules/favlinks/favlinks.routes";
 import folderRoutes from "./modules/folders/folders.routes";
@@ -61,9 +63,12 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
 
-app.get("/", (_req: Request, res: Response) => {
-  res.send("Hello, NorthStar ⭐!");
+app.get(["/favicon.png", "/favicon.ico"], (_req: Request, res: Response) => {
+  res.set("X-Content-Type-Options", "nosniff");
+  res.sendFile(resolve(__dirname, "../img/3006627.png"), { maxAge: "1d" });
 });
+
+app.get("/", homePage);
 
 app.get("/reset-password", resetPasswordPage);
 app.get("/forgot-password", forgotPasswordPage);

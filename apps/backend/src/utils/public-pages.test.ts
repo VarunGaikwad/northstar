@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { resolve } from "node:path";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 import type { Request, Response } from "express";
@@ -58,7 +60,7 @@ function browser(handler: typeof lrtPage, response: unknown, statusCode = 200, s
 }
 
 // Exercise mounts and API without Authorization or cookies, not just isolated handlers.
-test("backend recovery and LRT pages, stations, timetable and search APIs are public", async (t) => {
+test("backend welcome, recovery and LRT pages, favicon and public APIs are available", async (t) => {
   const methods = [
     { target: prisma.lrtTrip, name: "findMany", value: () => Promise.resolve([
       { tripIndex: 1, dayType: "WEEKDAY", direction: "INBOUND", trainType: "LOCAL", firstDepartMins: 360,
@@ -81,20 +83,41 @@ test("backend recovery and LRT pages, stations, timetable and search APIs are pu
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   const base = `http://127.0.0.1:${address.port}`;
-  for (const path of ["/forgot-password", "/lrt"]) {
+  for (const path of ["/", "/reset-password", "/forgot-password", "/lrt"]) {
     const response = await fetch(base + path + "?untrusted=never-reflect-me");
     const html = await response.text();
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-type") ?? "", /text\/html/);
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.equal(response.headers.get("referrer-policy"), "no-referrer");
-    const nonce = html.match(/<script nonce="([^"]+)">/)?.[1];
+    const nonce = html.match(/<style nonce="([^"]+)">/)?.[1];
     assert.ok(nonce);
-    assert.ok(html.includes(`<style nonce="${nonce}">`));
-    assert.ok(response.headers.get("content-security-policy")?.includes(`script-src 'nonce-${nonce}'`));
+    assert.ok(response.headers.get("content-security-policy")?.includes(`style-src 'nonce-${nonce}'`));
+    assert.ok(response.headers.get("content-security-policy")?.includes("img-src 'self'"));
     assert.ok(response.headers.get("content-security-policy")?.includes("frame-ancestors 'none'"));
+    assert.match(html, /<link rel="icon" type="image\/png" href="\/favicon\.png">/);
     assert.doesNotMatch(html, /never-reflect-me|innerHTML/);
+    if (path === "/") {
+      assert.match(html, /<h1 id="welcome-heading">/);
+      for (const href of ["/health", "/lrt", "/forgot-password"]) assert.ok(html.includes(`href="${href}"`));
+      assert.doesNotMatch(html, /<script|<noscript>/);
+    } else {
+      assert.ok(html.includes(`<script nonce="${nonce}">`));
+      assert.ok(response.headers.get("content-security-policy")?.includes(`script-src 'nonce-${nonce}'`));
+    }
   }
+  const favicon = await readFile(resolve(__dirname, "../../img/3006627.png"));
+  for (const path of ["/favicon.png", "/favicon.ico"]) {
+    const response = await fetch(base + path);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type") ?? "", /image\/png/);
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.match(response.headers.get("cache-control") ?? "", /max-age=86400/);
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), favicon);
+  }
+  const health = await fetch(base + "/health");
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), { status: "ok" });
   const response = await fetch(base + "/api/lrt/timetable?date=2026-04-01");
   assert.equal(response.status, 200);
   assert.equal((await response.json() as { success: boolean }).success, true);
