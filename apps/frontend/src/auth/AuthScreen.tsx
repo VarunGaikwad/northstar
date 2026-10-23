@@ -210,6 +210,8 @@ export function AuthScreen() {
               <Input
                 label="Email"
                 type="email"
+                name="email"
+                autoComplete="username"
                 placeholder="user@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -220,6 +222,8 @@ export function AuthScreen() {
               <Input
                 label="Password"
                 type="password"
+                name="password"
+                autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

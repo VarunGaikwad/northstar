@@ -45,6 +45,41 @@ afterEach(() => {
 });
 
 describe("authenticated API requests", () => {
+  it("refreshes an expired access token before requesting data without disconnecting", async () => {
+    applyAuthData(
+      {
+        ...authData("expired-token"),
+        accessTokenExpiresAt: new Date(Date.now() - 1_000).toISOString(),
+      },
+      false,
+    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ success: true, data: authData("new-token") }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ success: true, data: [{ id: "folder-one" }] }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiGet<{ id: string }[]>("/folders")).resolves.toEqual([
+      { id: "folder-one" },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toContain("/auth/refresh");
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: "POST",
+      credentials: "include",
+    });
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({
+      headers: { Authorization: "Bearer new-token" },
+    });
+    expect(getAuthState().user).toEqual(user);
+    expect(getAuthState().accessToken).toBe("new-token");
+  });
+
   it("refreshes on 401 and retries once with the rotated token", async () => {
     applyAuthData(authData("old-token"), false);
     const fetchMock = vi
