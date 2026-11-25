@@ -42,7 +42,7 @@ function MetricCard({ icon, label, value, unit }: MetricCardProps) {
 }
 
 export function WeatherWidget({ className }: WeatherWidgetProps) {
-  const { data, isLoading, error } = useWeather();
+  const { data, isPending, error } = useWeather();
 
   return (
     <aside className={`h-full overflow-y-auto rounded-3xl bg-gradient-to-b from-white/[0.08] to-white/[0.03] border border-white/15 backdrop-blur-xl p-6 shadow-[0_12px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] ${className ?? ""}`}>
@@ -51,12 +51,14 @@ export function WeatherWidget({ className }: WeatherWidgetProps) {
           <CloudSun className="w-5 h-5 text-amber-300" />
           <span>Weather</span>
         </h2>
-        <Badge variant="success" dot size="sm">
-          Live
-        </Badge>
+        {data && !error && (
+          <Badge variant="success" dot size="sm">
+            Live
+          </Badge>
+        )}
       </div>
 
-      {isLoading && (
+      {isPending && (
         <div className="space-y-4">
           <Skeleton variant="rectangular" className="h-28 rounded-2xl" />
           <div className="grid grid-cols-2 gap-3">

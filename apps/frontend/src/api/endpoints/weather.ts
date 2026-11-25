@@ -14,7 +14,8 @@ export function useWeather(lat?: number, lon?: number) {
   return useQuery({
     queryKey: ["weather", effectiveLat ?? "auto", effectiveLon ?? "auto"],
     queryFn: () => apiPublicGet<WeatherResponse>(`/weather${params}`),
-    enabled: (lat !== undefined || lon !== undefined || !geo.isLoading) && hasCoords,
+    // If client location fails, let the backend resolve the request IP.
+    enabled: hasCoords || !geo.isLoading,
     refetchInterval: 600_000,
   });
 }

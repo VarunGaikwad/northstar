@@ -13,7 +13,9 @@ interface IpLocationResponse {
 }
 
 async function fetchIpLocation(): Promise<{ lat: number; lon: number }> {
-  const res = await fetch("https://ipapi.co/json/");
+  const res = await fetch("https://ipapi.co/json/", {
+    signal: AbortSignal.timeout(5_000),
+  });
   if (!res.ok) throw new Error("IP geolocation failed");
   const data = (await res.json()) as IpLocationResponse;
   if (typeof data.latitude !== "number" || typeof data.longitude !== "number") {
@@ -45,20 +47,28 @@ export function useGeolocation(): GeolocationState {
 
     if (!navigator.geolocation) {
       fallbackToIp();
-      return;
+      return () => { cancelled = true; };
     }
 
+    // The browser's timeout may not count time spent waiting for permission.
+    let browserPending = true;
+    const resolveBrowser = (resolve: () => void) => {
+      if (cancelled || !browserPending) return;
+      browserPending = false;
+      window.clearTimeout(deadline);
+      resolve();
+    };
+    const deadline = window.setTimeout(() => resolveBrowser(fallbackToIp), 10_000);
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      (pos) => resolveBrowser(() => {
         finish({
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
           isLoading: false,
         });
-      },
-      (err) => {
-        fallbackToIp(err);
-      },
+      }),
+      (err) => resolveBrowser(() => fallbackToIp(err)),
       {
         enableHighAccuracy: false,
         timeout: 10_000,
@@ -68,6 +78,7 @@ export function useGeolocation(): GeolocationState {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(deadline);
     };
   }, []);
 
