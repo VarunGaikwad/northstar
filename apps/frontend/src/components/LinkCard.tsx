@@ -45,6 +45,7 @@ export function LinkCard({ link, onEdit, onDelete, onPin, viewMode = "grid" }: L
         href={link.url}
         target="_self"
         rel="noopener noreferrer"
+        style={{ contentVisibility: "auto", containIntrinsicSize: "auto 72px" }}
         className="group relative flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.05] border border-white/10 text-white transition-all duration-200 hover:bg-white/[0.12] hover:border-white/20 hover:shadow-lg"
       >
         <div className="flex items-center gap-3 min-w-0">
@@ -57,6 +58,8 @@ export function LinkCard({ link, onEdit, onDelete, onPin, viewMode = "grid" }: L
               <img
                 src={iconSrc}
                 alt=""
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-contain rounded-md"
                 onError={handleIconError}
               />
@@ -121,7 +124,8 @@ export function LinkCard({ link, onEdit, onDelete, onPin, viewMode = "grid" }: L
       href={link.url}
       target="_self"
       rel="noopener noreferrer"
-      className="group relative flex flex-col items-center text-center p-4 rounded-2xl bg-white/[0.06] border border-white/12 backdrop-blur-xl text-white transition-all duration-200 hover:-translate-y-1 hover:bg-white/[0.14] hover:border-indigo-400/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.4),0_0_24px_rgba(129,140,248,0.2)]"
+      style={{ contentVisibility: "auto", containIntrinsicSize: "auto 170px" }}
+      className="group relative flex flex-col items-center text-center p-4 pt-10 rounded-2xl bg-white/[0.06] border border-white/12 text-white transition-colors duration-200 hover:bg-white/[0.14] hover:border-indigo-400/50"
     >
       {/* Action Menu (Top Right Hover Overlay) */}
       <div className="absolute top-2 right-2 flex items-center gap-1 opacity-100 transition-opacity duration-200 z-10">
@@ -164,10 +168,12 @@ export function LinkCard({ link, onEdit, onDelete, onPin, viewMode = "grid" }: L
           )} p-2.5 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-108 group-hover:shadow-indigo-500/40 transition-all duration-300 relative z-0`}
         >
           {showFavicon ? (
-            <div className="w-full h-full rounded-xl bg-slate-950/40 backdrop-blur-md p-1.5 flex items-center justify-center border border-white/20">
+            <div className="w-full h-full rounded-xl bg-slate-950/40 p-1.5 flex items-center justify-center border border-white/20">
               <img
                 src={iconSrc}
                 alt=""
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-contain drop-shadow"
                 onError={handleIconError}
               />

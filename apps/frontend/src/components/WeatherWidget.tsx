@@ -45,7 +45,7 @@ export function WeatherWidget({ className }: WeatherWidgetProps) {
   const { data, isPending, error } = useWeather();
 
   return (
-    <aside className={`h-full overflow-y-auto rounded-3xl bg-gradient-to-b from-white/[0.08] to-white/[0.03] border border-white/15 backdrop-blur-xl p-6 shadow-[0_12px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] ${className ?? ""}`}>
+    <aside className={`h-full overflow-y-auto rounded-3xl bg-white/[0.05] border border-white/15 p-4 sm:p-6 ${className ?? ""}`}>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-bold flex items-center gap-2 text-white">
           <CloudSun className="w-5 h-5 text-amber-300" />

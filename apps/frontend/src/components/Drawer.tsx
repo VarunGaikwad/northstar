@@ -32,12 +32,12 @@ export function Drawer({ open, onClose, title, children, icon }: DrawerProps) {
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity duration-300 animate-fade-up"
+        className="fixed inset-0 bg-slate-950/70"
         onClick={onClose}
       />
 
       {/* Drawer Container */}
-      <div className="relative z-10 max-w-md w-full h-full bg-slate-900/90 backdrop-blur-2xl border-l border-white/10 text-white shadow-2xl flex flex-col animate-[slideIn_0.22s_cubic-bezier(0.16,1,0.3,1)]">
+      <div className="relative z-10 w-full sm:w-[min(640px,85vw)] h-full bg-slate-900 border-l border-white/10 text-white shadow-2xl flex flex-col motion-safe:animate-[slideIn_0.22s_cubic-bezier(0.16,1,0.3,1)]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -56,7 +56,7 @@ export function Drawer({ open, onClose, title, children, icon }: DrawerProps) {
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 space-y-6">
           {children}
         </div>
       </div>

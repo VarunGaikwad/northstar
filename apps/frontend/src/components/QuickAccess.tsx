@@ -140,9 +140,9 @@ export function QuickAccess() {
         : "";
 
   return (
-    <div className="h-full min-h-0 flex flex-col rounded-3xl bg-gradient-to-b from-white/[0.08] to-white/[0.03] border border-white/15 backdrop-blur-xl p-6 shadow-[0_12px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)]">
+    <div className="h-full min-h-0 flex flex-col rounded-3xl bg-white/[0.05] border border-white/15 p-4 sm:p-6">
       {/* Header Bar */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex flex-wrap gap-3 items-center justify-between mb-5">
         <h2 className="text-lg font-bold flex items-center gap-2 text-white">
           <Bookmark className="w-5 h-5 text-indigo-400" />
           <span>Bookmarks & Links</span>
@@ -205,7 +205,7 @@ export function QuickAccess() {
 
       {/* Bookmark Grid / List Container */}
       <div
-        className={`flex-1 min-h-0 overflow-y-auto pr-1 ${
+        className={`flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 ${
           viewMode === "grid"
             ? "grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3.5 content-start"
             : "space-y-2"
