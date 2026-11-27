@@ -228,7 +228,7 @@ export function QuickAccess() {
           !linksLoading &&
           links.map((link) => (
             <LinkCard
-              key={link.id}
+              key={`${link.id}:${link.url}`}
               link={link}
               viewMode={viewMode}
               onPin={(l) => {

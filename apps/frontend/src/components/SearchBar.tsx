@@ -413,7 +413,7 @@ export function SearchBar({ autoFocus, className }: SearchBarProps) {
 
                 {matches.map((item, index) => (
                   <FavlinkSuggestionRow
-                    key={item.id}
+                    key={`${item.id}:${item.url}`}
                     item={item}
                     isSelected={selectedIndex === index}
                     onSelect={() => openLink(item.url)}
