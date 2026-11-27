@@ -87,8 +87,8 @@ function deferred() {
 
 beforeEach(() => {
   api.links = [
-    { id: "one", title: "Alpha One", url: "https://one.example", folderId: "folder-one", displayHost: "one.example", createdAt: "2025-01-01", updatedAt: "2025-01-01" },
-    { id: "two", title: "Alpha Two", url: "https://two.example", folderId: "folder-two", displayHost: "two.example", createdAt: "2025-01-01", updatedAt: "2025-01-01" },
+    { id: "one", isPinned: false, title: "Alpha One", url: "https://one.example", folderId: "folder-one", displayHost: "one.example", createdAt: "2025-01-01", updatedAt: "2025-01-01" },
+    { id: "two", isPinned: false, title: "Alpha Two", url: "https://two.example", folderId: "folder-two", displayHost: "two.example", createdAt: "2025-01-01", updatedAt: "2025-01-01" },
   ];
   api.mutate.mockReset().mockResolvedValue(undefined);
   frames = new Map();
@@ -188,7 +188,7 @@ describe("SearchBar bookmark editing", () => {
     expect(button("Cancel").disabled).toBe(false);
     await act(async () => { submit(dialog()!.querySelector("form")!); });
     expect(api.mutate).toHaveBeenCalledTimes(2);
-    expect(api.mutate).toHaveBeenLastCalledWith({ id: "two", title: "Alpha Retry", url: "https://retry.example" });
+    expect(api.mutate).toHaveBeenLastCalledWith({ id: "two", isPinned: false, title: "Alpha Retry", url: "https://retry.example" });
     expect(dialog()).toBeNull();
   });
 
