@@ -7,26 +7,7 @@ interface GeolocationState {
   isLoading: boolean;
 }
 
-interface IpLocationResponse {
-  latitude: number;
-  longitude: number;
-}
-
-async function fetchIpLocation(): Promise<{ lat: number; lon: number }> {
-  const res = await fetch("https://ipapi.co/json/", {
-    signal: AbortSignal.timeout(5_000),
-  });
-  if (!res.ok) throw new Error("IP geolocation failed");
-  const data = (await res.json()) as IpLocationResponse;
-  if (typeof data.latitude !== "number" || typeof data.longitude !== "number") {
-    throw new Error("Invalid IP geolocation response");
-  }
-  return { lat: data.latitude, lon: data.longitude };
-}
-
-/** Get the user's current coordinates once. Uses the browser geolocation API
- * first, then falls back to IP-based geolocation if permission is denied or
- * unavailable. */
+/** Get browser coordinates once; the weather API handles IP fallback. */
 export function useGeolocation(): GeolocationState {
   const [state, setState] = useState<GeolocationState>(() => ({
     isLoading: true,
@@ -40,9 +21,7 @@ export function useGeolocation(): GeolocationState {
     };
 
     const fallbackToIp = (error?: GeolocationPositionError) => {
-      fetchIpLocation()
-        .then((loc) => finish({ lat: loc.lat, lon: loc.lon, isLoading: false }))
-        .catch(() => finish({ error, isLoading: false }));
+      finish({ error, isLoading: false });
     };
 
     if (!navigator.geolocation) {
