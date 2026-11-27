@@ -1,10 +1,10 @@
-import accessIcon from "../assets/office-icons/access.svg";
-import excelIcon from "../assets/office-icons/excel.svg";
-import formsIcon from "../assets/office-icons/forms.svg";
-import oneDriveIcon from "../assets/office-icons/onedrive.svg";
-import oneNoteIcon from "../assets/office-icons/onenote.svg";
-import sharePointIcon from "../assets/office-icons/sharepoint.svg";
-import teamsIcon from "../assets/office-icons/teams.svg";
+import accessIcon from "../assets/office-icons/access.svg?no-inline";
+import excelIcon from "../assets/office-icons/excel.svg?no-inline";
+import formsIcon from "../assets/office-icons/forms.svg?no-inline";
+import oneDriveIcon from "../assets/office-icons/onedrive.svg?no-inline";
+import oneNoteIcon from "../assets/office-icons/onenote.svg?no-inline";
+import sharePointIcon from "../assets/office-icons/sharepoint.svg?no-inline";
+import teamsIcon from "../assets/office-icons/teams.svg?no-inline";
 
 export const GRADIENTS = [
   "from-indigo-500 to-purple-600",
