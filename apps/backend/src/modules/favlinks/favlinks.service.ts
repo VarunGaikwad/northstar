@@ -8,6 +8,7 @@ const favlinkSelect = {
   title: true,
   url: true,
   folderId: true,
+  isPinned: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -82,6 +83,7 @@ export async function update(
   return prisma.favLink.update({
     where: { id: favlinkId },
     data: {
+      ...(input.isPinned !== undefined ? { isPinned: input.isPinned } : {}),
       ...(input.title !== undefined ? { title: input.title.trim() } : {}),
       ...(input.url !== undefined ? { url: input.url.trim() } : {}),
       ...(input.folderId !== undefined ? { folderId: input.folderId } : {}),

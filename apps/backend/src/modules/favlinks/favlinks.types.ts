@@ -3,6 +3,7 @@ export type FavLinkResponse = {
   title: string;
   url: string;
   folderId: string | null;
+  isPinned: boolean;
   createdAt: Date;
   updatedAt: Date;
 };

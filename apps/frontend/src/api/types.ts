@@ -35,6 +35,7 @@ export interface Folder {
 }
 
 export interface FavLink {
+  isPinned: boolean;
   id: string;
   title: string;
   url: string;

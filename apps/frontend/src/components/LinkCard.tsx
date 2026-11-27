@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, Trash2, ExternalLink, Copy, Check } from "lucide-react";
+import { Pencil, Trash2, ExternalLink, Copy, Check, Pin, PinOff } from "lucide-react";
 import type { FavLink } from "../types";
 import { gradientFor, prettyUrl, faviconUrl, fallbackFaviconUrl } from "../utils/gradients";
 import { IconButton } from "./ui";
@@ -8,10 +8,11 @@ interface LinkCardProps {
   link: FavLink;
   onEdit: (link: FavLink) => void;
   onDelete: (link: FavLink) => void;
+  onPin: (link: FavLink) => void;
   viewMode?: "grid" | "list";
 }
 
-export function LinkCard({ link, onEdit, onDelete, viewMode = "grid" }: LinkCardProps) {
+export function LinkCard({ link, onEdit, onDelete, onPin, viewMode = "grid" }: LinkCardProps) {
   const initial = (link.title || "?").trim().charAt(0).toUpperCase();
   const primaryIcon = faviconUrl(link.url);
   const secondaryIcon = fallbackFaviconUrl(link.url);
@@ -73,7 +74,14 @@ export function LinkCard({ link, onEdit, onDelete, viewMode = "grid" }: LinkCard
           </div>
         </div>
 
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0">
+        <div className="flex items-center gap-1 opacity-100 transition-opacity duration-150 shrink-0">
+          <IconButton
+            icon={link.isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+            label={`${link.isPinned ? "Unpin" : "Pin"} ${link.title}`}
+            variant="ghost"
+            size="sm"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPin(link); }}
+          />
           <IconButton
             icon={copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             label="Copy URL"
@@ -116,7 +124,14 @@ export function LinkCard({ link, onEdit, onDelete, viewMode = "grid" }: LinkCard
       className="group relative flex flex-col items-center text-center p-4 rounded-2xl bg-white/[0.06] border border-white/12 backdrop-blur-xl text-white transition-all duration-200 hover:-translate-y-1 hover:bg-white/[0.14] hover:border-indigo-400/50 hover:shadow-[0_12px_32px_rgba(0,0,0,0.4),0_0_24px_rgba(129,140,248,0.2)]"
     >
       {/* Action Menu (Top Right Hover Overlay) */}
-      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+      <div className="absolute top-2 right-2 flex items-center gap-1 opacity-100 transition-opacity duration-200 z-10">
+        <IconButton
+            icon={link.isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+            label={`${link.isPinned ? "Unpin" : "Pin"} ${link.title}`}
+            variant="ghost"
+            size="sm"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPin(link); }}
+          />
         <IconButton
           icon={<Pencil className="w-3 h-3" />}
           label={`Edit ${link.title}`}

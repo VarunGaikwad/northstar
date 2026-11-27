@@ -10,11 +10,12 @@ export const updateFavlinkSchema = z
   .object({
     title: z.string().trim().min(1, "Title is required").max(200, "Title must be at most 200 characters").optional(),
     url: z.string().trim().url("Invalid URL").max(2048, "URL must be at most 2048 characters").optional(),
+    isPinned: z.boolean().optional(),
     folderId: z
       .union([z.string().cuid("Invalid folder id"), z.null()])
       .optional(),
   })
-  .refine((data) => data.title !== undefined || data.url !== undefined || data.folderId !== undefined, {
+  .refine((data) => data.title !== undefined || data.url !== undefined || data.folderId !== undefined || data.isPinned !== undefined, {
     message: "At least one field must be provided",
   });
 

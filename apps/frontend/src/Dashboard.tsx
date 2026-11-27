@@ -1,3 +1,4 @@
+import { useAllFavLinks } from "./api/endpoints/favlinks";
 import { useEffect, useState } from "react";
 import { Bookmark, TrainFront, Clock, CloudSun, WifiOff } from "lucide-react";
 import { useBackground } from "./api/endpoints/background";
@@ -62,6 +63,9 @@ export default function Dashboard() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const { data: allLinks = [] } = useAllFavLinks();
+  const pinnedLinks = allLinks.filter((link) => link.isPinned);
+
   return (
     <div className="relative h-screen w-full overflow-hidden font-sans text-white bg-slate-950">
       {/* Background Image Container */}
@@ -97,6 +101,18 @@ export default function Dashboard() {
 
       {/* Hero Section */}
       <main className="relative z-10 h-full flex flex-col items-center justify-center px-6 gap-6 max-w-4xl mx-auto">
+        {pinnedLinks.length > 0 && (
+          <section aria-label="Pinned links" className="w-full max-w-2xl">
+            <h2 className="text-sm font-semibold text-white/80 mb-2">Pinned Links</h2>
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {pinnedLinks.map((link) => (
+                <a key={link.id} href={link.url} className="shrink-0 max-w-48 truncate rounded-xl border border-white/20 bg-slate-900/60 px-4 py-2 text-sm text-white hover:bg-slate-800/80" title={link.title}>
+                  {link.title}
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
         <CenterClock />
         <SearchBar className="w-full" />
       </main>

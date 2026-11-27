@@ -64,7 +64,7 @@ export function useCreateFavLink() {
 
 export function useUpdateFavLink() {
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; title?: string; url?: string; folderId?: string | null }) =>
+    mutationFn: ({ id, ...body }: { id: string; title?: string; url?: string; folderId?: string | null; isPinned?: boolean }) =>
       apiPatch<FavLink>(`/favlinks/${id}`, body),
     onSuccess: (link) => {
       const userId = currentUserId();

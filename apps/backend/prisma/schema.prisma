@@ -84,6 +84,7 @@ model FavLink {
   folderId  String?
   title     String
   url       String
+  isPinned  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -231,6 +231,12 @@ export function QuickAccess() {
               key={link.id}
               link={link}
               viewMode={viewMode}
+              onPin={(l) => {
+                setFormError(null);
+                updateFavLink.mutate({ id: l.id, isPinned: !l.isPinned }, {
+                  onError: () => setFormError("Could not update pin. Please try again."),
+                });
+              }}
               onEdit={(l) => setLinkModal({ open: true, editing: l })}
               onDelete={(l) => setDeleteTarget({ kind: "link", link: l })}
             />
